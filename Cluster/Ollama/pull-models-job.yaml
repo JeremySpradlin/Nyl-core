@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ollama-pull-models
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: pull
+          image: curlimages/curl:8.5.0
+          envFrom:
+            - configMapRef:
+                name: ollama-models
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              host="http://ollama:11434"
+              echo "waiting for ollama at ${host}"
+              until curl -sf "${host}/api/tags" >/dev/null; do
+                sleep 5
+              done
+              for model in ${PREPULL_MODELS}; do
+                echo "pulling ${model}"
+                curl -sS -X POST "${host}/api/pull" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"name\":\"${model}\"}" | cat
+              done
