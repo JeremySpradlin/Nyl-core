@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: trilium-next
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: trilium.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: trilium-next
+                port:
+                  number: 8080

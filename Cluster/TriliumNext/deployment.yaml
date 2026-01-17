@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trilium-next
+  labels:
+    app: trilium-next
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trilium-next
+  template:
+    metadata:
+      labels:
+        app: trilium-next
+    spec:
+      containers:
+        - name: trilium-next
+          image: triliumnext/trilium:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          volumeMounts:
+            - name: trilium-next-data
+              mountPath: /home/node/trilium-data
+      volumes:
+        - name: trilium-next-data
+          persistentVolumeClaim:
+            claimName: trilium-next-data
