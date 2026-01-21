@@ -24,17 +24,22 @@ const formatModelLabel = (name) => {
   return sizeToken ? label.replace(sizeToken, sizeToken.toUpperCase()) : label;
 };
 
-const parseSseLines = (buffer) => {
+const parseSseEvents = (buffer) => {
   const events = [];
-  const lines = buffer.split("\n");
-  let remaining = lines.pop() || "";
+  const chunks = buffer.replace(/\r/g, "").split("\n\n");
+  const remaining = chunks.pop() || "";
 
-  for (const line of lines) {
-    if (!line.startsWith("data:")) {
+  for (const chunk of chunks) {
+    if (!chunk.trim()) {
       continue;
     }
-    const data = line.replace(/^data:\s?/, "");
-    events.push(data);
+    const dataLines = chunk
+      .split("\n")
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.replace(/^data:\s?/, ""));
+    if (dataLines.length) {
+      events.push(dataLines.join("\n"));
+    }
   }
 
   return { events, remaining };
@@ -70,8 +75,11 @@ export default function App() {
   const [input, setInput] = useState("");
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
-  const [streamingText, setStreamingText] = useState("");
+  const [streamingId, setStreamingId] = useState(null);
   const scrollRef = useRef(null);
+  const abortRef = useRef(null);
+  const historyRef = useRef(history);
+  const streamUpdateRef = useRef({ timer: null, text: "" });
 
   const modelOptions = useMemo(() => {
     return models.map((model) => ({
@@ -79,6 +87,10 @@ export default function App() {
       label: formatModelLabel(model.name || model.id)
     }));
   }, [models]);
+
+  useEffect(() => {
+    historyRef.current = history;
+  }, [history]);
 
   useEffect(() => {
     const loadModels = async () => {
@@ -105,13 +117,45 @@ export default function App() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [history, streamingText]);
+  }, [history]);
+
+  useEffect(() => {
+    return () => {
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
+      if (streamUpdateRef.current.timer) {
+        clearTimeout(streamUpdateRef.current.timer);
+        streamUpdateRef.current.timer = null;
+      }
+    };
+  }, []);
+
+  const scheduleAssistantUpdate = (entryId, nextText) => {
+    streamUpdateRef.current.text = nextText;
+    if (streamUpdateRef.current.timer) {
+      return;
+    }
+    streamUpdateRef.current.timer = setTimeout(() => {
+      const text = streamUpdateRef.current.text;
+      streamUpdateRef.current.timer = null;
+      setHistory((prev) =>
+        prev.map((entry) => (entry.id === entryId ? { ...entry, assistant: text } : entry))
+      );
+    }, 40);
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!input.trim() || !selectedModel || status === "streaming") {
       return;
     }
+
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     setStatus("streaming");
     setError("");
@@ -125,12 +169,12 @@ export default function App() {
       assistant: ""
     };
     setHistory((prev) => [...prev, newEntry]);
-    setStreamingText("");
+    setStreamingId(newEntry.id);
 
     try {
       const payload = {
         model: selectedModel,
-        messages: buildMessages(systemPrompt, history, userMessage),
+        messages: buildMessages(systemPrompt, historyRef.current, userMessage),
         stream: true,
         rag: { enabled: false, source: "trilium", top_k: 5 }
       };
@@ -138,7 +182,8 @@ export default function App() {
       const response = await fetch(`${API_BASE}/v1/chat/completions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: controller.signal
       });
 
       if (!response.ok || !response.body) {
@@ -157,33 +202,49 @@ export default function App() {
         }
 
         buffer += decoder.decode(value, { stream: true });
-        const { events, remaining } = parseSseLines(buffer);
+        const { events, remaining } = parseSseEvents(buffer);
         buffer = remaining;
 
         for (const event of events) {
           if (event === "[DONE]") {
             continue;
           }
-          const data = JSON.parse(event);
-          const delta = data?.choices?.[0]?.delta;
-          if (delta?.content) {
-            assistantText += delta.content;
-            setStreamingText(assistantText);
+          let data;
+          try {
+            data = JSON.parse(event);
+          } catch (parseError) {
+            continue;
           }
+          const delta = data?.choices?.[0]?.delta;
+          if (!delta?.content) {
+            continue;
+          }
+          assistantText += delta.content;
+          scheduleAssistantUpdate(newEntry.id, assistantText);
         }
       }
 
+      if (streamUpdateRef.current.timer) {
+        clearTimeout(streamUpdateRef.current.timer);
+        streamUpdateRef.current.timer = null;
+      }
       setHistory((prev) =>
         prev.map((entry) =>
           entry.id === newEntry.id ? { ...entry, assistant: assistantText } : entry
         )
       );
-      setStreamingText("");
       setStatus("idle");
+      setStreamingId(null);
+      abortRef.current = null;
     } catch (err) {
+      if (err.name === "AbortError") {
+        setStatus("idle");
+        setStreamingId(null);
+        return;
+      }
       setStatus("idle");
       setError(err.message || "Something went wrong.");
-      setStreamingText("");
+      setStreamingId(null);
     }
   };
 
@@ -217,19 +278,6 @@ export default function App() {
       </header>
 
       <main className="main">
-        <section className="panel">
-          <div className="panel-header">
-            <h2>System guidance</h2>
-            <p>Keep the tone and intent explicit for every session.</p>
-          </div>
-          <textarea
-            className="textarea"
-            value={systemPrompt}
-            onChange={(event) => setSystemPrompt(event.target.value)}
-            rows={6}
-          />
-        </section>
-
         <section className="panel chat">
           <div className="panel-header">
             <h2>Conversation</h2>
@@ -247,18 +295,21 @@ export default function App() {
                   <span className="chat-label">You</span>
                   <p>{entry.user}</p>
                 </div>
-                <div className="chat-bubble assistant">
-                  <span className="chat-label">Nyl</span>
-                  <p>{entry.assistant}</p>
-                </div>
+                {(entry.assistant || (status === "streaming" && entry.id === streamingId)) && (
+                  <div
+                    className={`chat-bubble assistant${
+                      status === "streaming" && entry.id === streamingId ? " live" : ""
+                    }`}
+                  >
+                    <span className="chat-label">Nyl</span>
+                    <p>
+                      {entry.assistant ||
+                        (status === "streaming" && entry.id === streamingId ? "..." : "")}
+                    </p>
+                  </div>
+                )}
               </div>
             ))}
-            {status === "streaming" && (
-              <div className="chat-bubble assistant live">
-                <span className="chat-label">Nyl</span>
-                <p>{streamingText || "..."}</p>
-              </div>
-            )}
           </div>
 
           <form className="composer" onSubmit={handleSubmit}>
@@ -274,6 +325,19 @@ export default function App() {
           </form>
 
           {error && <div className="error">{error}</div>}
+        </section>
+
+        <section className="panel">
+          <div className="panel-header">
+            <h2>System guidance</h2>
+            <p>Keep the tone and intent explicit for every session.</p>
+          </div>
+          <textarea
+            className="textarea"
+            value={systemPrompt}
+            onChange={(event) => setSystemPrompt(event.target.value)}
+            rows={6}
+          />
         </section>
       </main>
     </div>
