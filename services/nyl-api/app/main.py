@@ -1,11 +1,25 @@
+import os
+
 import httpx
 from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from .ollama import chat, get_ollama_client, list_models, stream_chat
 from .schemas import ChatRequest
 
 app = FastAPI(title="Nyl API")
+
+cors_origins = [origin.strip() for origin in os.getenv("CORS_ALLOW_ORIGINS", "").split(",") if origin.strip()]
+if cors_origins:
+    allow_all = "*" in cors_origins
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"] if allow_all else cors_origins,
+        allow_credentials=not allow_all,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 @app.get("/health")
