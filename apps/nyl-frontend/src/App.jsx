@@ -76,6 +76,8 @@ export default function App() {
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
   const [streamingId, setStreamingId] = useState(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [theme, setTheme] = useState("light");
   const scrollRef = useRef(null);
   const abortRef = useRef(null);
   const historyRef = useRef(history);
@@ -91,6 +93,29 @@ export default function App() {
   useEffect(() => {
     historyRef.current = history;
   }, [history]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const saved = window.localStorage.getItem("nyl-theme");
+    if (saved) {
+      setTheme(saved);
+      return;
+    }
+    const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+    setTheme(prefersDark ? "dark" : "light");
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    document.documentElement.setAttribute("data-theme", theme);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("nyl-theme", theme);
+    }
+  }, [theme]);
 
   useEffect(() => {
     const loadModels = async () => {
@@ -120,10 +145,10 @@ export default function App() {
   }, [history]);
 
   useEffect(() => {
-    return () => {
-      if (abortRef.current) {
-        abortRef.current.abort();
-      }
+        return () => {
+          if (abortRef.current) {
+            abortRef.current.abort();
+          }
       if (streamUpdateRef.current.timer) {
         clearTimeout(streamUpdateRef.current.timer);
         streamUpdateRef.current.timer = null;
@@ -250,96 +275,183 @@ export default function App() {
 
   return (
     <div className="page">
-      <header className="hero">
-        <div>
-          <p className="hero-tag">Nyl home assistant</p>
-          <h1>Stay grounded, map your day, and think out loud.</h1>
-          <p className="hero-sub">
-            A calm workspace for planning, remembering, and exploring. Stream replies in real time
-            and keep your system prompt close.
-          </p>
+      <div className="top-nav">
+        <div className="top-nav-brand">
+          <span className="titlebar-mark">Nyl</span>
+          <span className="titlebar-dot">Home</span>
         </div>
-        <div className="hero-card">
-          <div className="hero-card-title">Model</div>
-          <select
-            value={selectedModel}
-            onChange={(event) => setSelectedModel(event.target.value)}
-            className="select"
-          >
-            {modelOptions.length === 0 && <option>Loading models...</option>}
-            {modelOptions.map((model) => (
-              <option key={model.id || model.name} value={model.name || model.id}>
-                {model.label}
-              </option>
-            ))}
-          </select>
-          <div className="hero-card-footer">Streaming from {API_BASE}</div>
-        </div>
-      </header>
-
-      <main className="main">
-        <section className="panel chat">
-          <div className="panel-header">
-            <h2>Conversation</h2>
-            <p>{status === "streaming" ? "Streaming reply..." : "Ready for your next thought."}</p>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Open settings"
+          aria-expanded={isSettingsOpen}
+          onClick={() => setIsSettingsOpen(true)}
+        >
+          <span aria-hidden="true">⚙</span>
+        </button>
+      </div>
+      <div className="content">
+        <header className="hero">
+          <div>
+            <p className="hero-tag">Nyl home assistant</p>
+            <h1>Stay grounded, map your day, and think out loud.</h1>
+            <p className="hero-sub">
+              A calm workspace for planning, remembering, and exploring. Stream replies in real
+              time and keep your system prompt close.
+            </p>
           </div>
-          <div className="chat-stream" ref={scrollRef}>
-            {history.length === 0 && (
-              <div className="chat-empty">
-                <p>Start with a plan, a question, or a memory you want to capture.</p>
-              </div>
-            )}
-            {history.map((entry) => (
-              <div key={entry.id} className="chat-pair">
-                <div className="chat-bubble user">
-                  <span className="chat-label">You</span>
-                  <p>{entry.user}</p>
+          <div className="hero-card">
+            <div className="hero-card-title">Model</div>
+            <select
+              value={selectedModel}
+              onChange={(event) => setSelectedModel(event.target.value)}
+              className="select"
+            >
+              {modelOptions.length === 0 && <option>Loading models...</option>}
+              {modelOptions.map((model) => (
+                <option key={model.id || model.name} value={model.name || model.id}>
+                  {model.label}
+                </option>
+              ))}
+            </select>
+            <div className="hero-card-footer">Streaming from {API_BASE}</div>
+          </div>
+        </header>
+
+        <main className="main">
+          <section className="panel chat">
+            <div className="panel-header">
+              <h2>Conversation</h2>
+              <p>{status === "streaming" ? "Streaming reply..." : "Ready for your next thought."}</p>
+            </div>
+            <div className="chat-stream" ref={scrollRef}>
+              {history.length === 0 && (
+                <div className="chat-empty">
+                  <p>Start with a plan, a question, or a memory you want to capture.</p>
                 </div>
-                {(entry.assistant || (status === "streaming" && entry.id === streamingId)) && (
-                  <div
-                    className={`chat-bubble assistant${
-                      status === "streaming" && entry.id === streamingId ? " live" : ""
-                    }`}
-                  >
-                    <span className="chat-label">Nyl</span>
-                    <p>
-                      {entry.assistant ||
-                        (status === "streaming" && entry.id === streamingId ? "..." : "")}
-                    </p>
+              )}
+              {history.map((entry) => (
+                <div key={entry.id} className="chat-pair">
+                  <div className="chat-bubble user">
+                    <span className="chat-label">You</span>
+                    <p>{entry.user}</p>
                   </div>
-                )}
+                  {(entry.assistant || (status === "streaming" && entry.id === streamingId)) && (
+                    <div
+                      className={`chat-bubble assistant${
+                        status === "streaming" && entry.id === streamingId ? " live" : ""
+                      }`}
+                    >
+                      <span className="chat-label">Nyl</span>
+                      <p>
+                        {entry.assistant ||
+                          (status === "streaming" && entry.id === streamingId ? "..." : "")}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <form className="composer" onSubmit={handleSubmit}>
+              <input
+                className="input"
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                placeholder="Ask Nyl to plan, organize, or reflect..."
+              />
+              <button className="button" type="submit" disabled={status === "streaming"}>
+                Send
+              </button>
+            </form>
+
+            {error && <div className="error">{error}</div>}
+          </section>
+
+          <section className="panel">
+            <div className="panel-header">
+              <h2>Session status</h2>
+              <p>Track the model and keep context tight for the conversation.</p>
+            </div>
+            <div className="status-panel">
+              <div>
+                <div className="status-label">Active model</div>
+                <div className="status-value">{selectedModel || "Loading..."}</div>
               </div>
-            ))}
-          </div>
+              <div>
+                <div className="status-label">System guidance</div>
+                <div className="status-value">
+                  {systemPrompt.trim()
+                    ? `${systemPrompt.trim().slice(0, 120)}${systemPrompt.trim().length > 120 ? "…" : ""}`
+                    : "Not set yet."}
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
 
-          <form className="composer" onSubmit={handleSubmit}>
-            <input
-              className="input"
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder="Ask Nyl to plan, organize, or reflect..."
-            />
-            <button className="button" type="submit" disabled={status === "streaming"}>
-              Send
-            </button>
-          </form>
-
-          {error && <div className="error">{error}</div>}
-        </section>
-
-        <section className="panel">
-          <div className="panel-header">
-            <h2>System guidance</h2>
-            <p>Keep the tone and intent explicit for every session.</p>
-          </div>
-          <textarea
-            className="textarea"
-            value={systemPrompt}
-            onChange={(event) => setSystemPrompt(event.target.value)}
-            rows={6}
+      {isSettingsOpen && (
+        <div className="settings-overlay" role="presentation">
+          <button
+            type="button"
+            className="settings-scrim"
+            aria-label="Close settings"
+            onClick={() => setIsSettingsOpen(false)}
           />
-        </section>
-      </main>
+          <aside className="settings-drawer" role="dialog" aria-label="Settings">
+            <div className="settings-header">
+              <div>
+                <h2>Settings</h2>
+                <p>Adjust guidance and tune the session to your needs.</p>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Close settings"
+                onClick={() => setIsSettingsOpen(false)}
+              >
+                <span aria-hidden="true">✕</span>
+              </button>
+            </div>
+
+            <div className="settings-section">
+              <div className="panel-header">
+                <h3>System guidance</h3>
+                <p>Keep the tone and intent explicit for every session.</p>
+              </div>
+              <textarea
+                className="textarea"
+                value={systemPrompt}
+                onChange={(event) => setSystemPrompt(event.target.value)}
+                rows={8}
+              />
+            </div>
+
+            <div className="settings-section">
+              <div className="panel-header">
+                <h3>More controls</h3>
+                <p>Room for memory, personas, or safety toggles later.</p>
+              </div>
+              <div className="settings-card">
+                <div>
+                  <div className="settings-title">Dark mode</div>
+                  <div className="settings-sub">Switch the interface palette.</div>
+                </div>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={theme === "dark"}
+                    onChange={(event) => setTheme(event.target.checked ? "dark" : "light")}
+                  />
+                  <span className="slider" />
+                </label>
+              </div>
+              <div className="settings-placeholder">New settings will appear here.</div>
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 }
