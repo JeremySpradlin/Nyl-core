@@ -11,15 +11,35 @@ from .schemas import ChatRequest
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
 OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "30"))
+_ollama_client: httpx.AsyncClient | None = None
 
 
 def _ollama_timeout() -> httpx.Timeout:
-    return httpx.Timeout(OLLAMA_TIMEOUT, connect=OLLAMA_TIMEOUT)
+    return httpx.Timeout(
+        connect=OLLAMA_TIMEOUT,
+        read=None,
+        write=OLLAMA_TIMEOUT,
+        pool=OLLAMA_TIMEOUT,
+    )
 
 
-async def get_ollama_client() -> AsyncGenerator[httpx.AsyncClient, None]:
-    async with httpx.AsyncClient(base_url=OLLAMA_BASE_URL, timeout=_ollama_timeout()) as client:
-        yield client
+async def startup_ollama_client() -> None:
+    global _ollama_client
+    if _ollama_client is None:
+        _ollama_client = httpx.AsyncClient(base_url=OLLAMA_BASE_URL, timeout=_ollama_timeout())
+
+
+async def shutdown_ollama_client() -> None:
+    global _ollama_client
+    if _ollama_client is not None:
+        await _ollama_client.aclose()
+        _ollama_client = None
+
+
+def get_ollama_client() -> httpx.AsyncClient:
+    if _ollama_client is None:
+        raise RuntimeError("Ollama client is not initialized")
+    return _ollama_client
 
 
 async def list_models(client: httpx.AsyncClient = Depends(get_ollama_client)) -> dict[str, Any]:
@@ -124,4 +144,3 @@ async def chat(
             }
         ],
     }
-

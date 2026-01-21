@@ -1,40 +1,35 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nyl-api
+  name: nyl-frontend
   labels:
-    app: nyl-api
+    app: nyl-frontend
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: nyl-api
+      app: nyl-frontend
   template:
     metadata:
       labels:
-        app: nyl-api
+        app: nyl-frontend
     spec:
       containers:
-        - name: nyl-api
-          image: localhost:32000/nyl-api:latest
+        - name: nyl-frontend
+          image: localhost:32000/nyl-frontend:latest
           imagePullPolicy: Always
           ports:
             - name: http
-              containerPort: 8000
-          env:
-            - name: OLLAMA_BASE_URL
-              value: http://ollama:11434
-            - name: CORS_ALLOW_ORIGINS
-              value: http://localhost:5173,http://localhost:3000,http://nyl.local
+              containerPort: 80
           readinessProbe:
             httpGet:
-              path: /health
+              path: /
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /health
+              path: /
               port: http
             initialDelaySeconds: 20
             periodSeconds: 20

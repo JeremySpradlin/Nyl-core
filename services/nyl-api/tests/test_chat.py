@@ -121,10 +121,9 @@ async def test_chat_endpoint_non_stream():
 
 @pytest.mark.asyncio
 async def test_chat_invalid_payload():
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    transport = build_mock_transport(lambda request: httpx.Response(500))
+    async with app_client(transport) as client:
         response = await client.post("/v1/chat/completions", json={"stream": True})
-
     assert response.status_code == 422
 
 

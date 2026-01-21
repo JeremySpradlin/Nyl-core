@@ -1,0 +1,281 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://api.nyl.local";
+
+const initialSystemPrompt =
+  "You are Nyl, a steady, helpful home assistant. Be concise, thoughtful, and practical.";
+
+const formatModelLabel = (name) => {
+  if (!name) return "Unknown model";
+  const normalized = name.replace(/[:_]/g, " ").trim();
+  const parts = normalized.split(/\s+/);
+  const sizeToken = parts.find((part) => /\d+b/i.test(part));
+  const labelParts = parts.map((part) => {
+    if (/\d+(\.\d+)?/i.test(part) && part.includes(".")) {
+      return part;
+    }
+    if (/\d+b/i.test(part)) {
+      return part.toUpperCase();
+    }
+    return part.charAt(0).toUpperCase() + part.slice(1);
+  });
+
+  const label = labelParts.join(" ").replace(/B/, "B");
+  return sizeToken ? label.replace(sizeToken, sizeToken.toUpperCase()) : label;
+};
+
+const parseSseLines = (buffer) => {
+  const events = [];
+  const lines = buffer.split("\n");
+  let remaining = lines.pop() || "";
+
+  for (const line of lines) {
+    if (!line.startsWith("data:")) {
+      continue;
+    }
+    const data = line.replace(/^data:\s?/, "");
+    events.push(data);
+  }
+
+  return { events, remaining };
+};
+
+const buildMessages = (systemPrompt, history, userMessage) => {
+  const messages = [];
+  if (systemPrompt.trim()) {
+    messages.push({ role: "system", content: systemPrompt.trim() });
+  }
+  history.forEach((entry) => {
+    messages.push({ role: "user", content: entry.user });
+    if (entry.assistant) {
+      messages.push({ role: "assistant", content: entry.assistant });
+    }
+  });
+  messages.push({ role: "user", content: userMessage });
+  return messages;
+};
+
+const makeId = () => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+export default function App() {
+  const [models, setModels] = useState([]);
+  const [selectedModel, setSelectedModel] = useState("");
+  const [systemPrompt, setSystemPrompt] = useState(initialSystemPrompt);
+  const [history, setHistory] = useState([]);
+  const [input, setInput] = useState("");
+  const [status, setStatus] = useState("idle");
+  const [error, setError] = useState("");
+  const [streamingText, setStreamingText] = useState("");
+  const scrollRef = useRef(null);
+
+  const modelOptions = useMemo(() => {
+    return models.map((model) => ({
+      ...model,
+      label: formatModelLabel(model.name || model.id)
+    }));
+  }, [models]);
+
+  useEffect(() => {
+    const loadModels = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/v1/models`);
+        if (!response.ok) {
+          throw new Error("Could not load models.");
+        }
+        const data = await response.json();
+        const list = data.models || [];
+        setModels(list);
+        if (list.length && !selectedModel) {
+          setSelectedModel(list[0].name || list[0].id);
+        }
+      } catch (err) {
+        setError(err.message || "Failed to load models.");
+      }
+    };
+
+    loadModels();
+  }, [selectedModel]);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [history, streamingText]);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!input.trim() || !selectedModel || status === "streaming") {
+      return;
+    }
+
+    setStatus("streaming");
+    setError("");
+
+    const userMessage = input.trim();
+    setInput("");
+
+    const newEntry = {
+      id: makeId(),
+      user: userMessage,
+      assistant: ""
+    };
+    setHistory((prev) => [...prev, newEntry]);
+    setStreamingText("");
+
+    try {
+      const payload = {
+        model: selectedModel,
+        messages: buildMessages(systemPrompt, history, userMessage),
+        stream: true,
+        rag: { enabled: false, source: "trilium", top_k: 5 }
+      };
+
+      const response = await fetch(`${API_BASE}/v1/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error("The chat stream could not be started.");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let assistantText = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const { events, remaining } = parseSseLines(buffer);
+        buffer = remaining;
+
+        for (const event of events) {
+          if (event === "[DONE]") {
+            continue;
+          }
+          const data = JSON.parse(event);
+          const delta = data?.choices?.[0]?.delta;
+          if (delta?.content) {
+            assistantText += delta.content;
+            setStreamingText(assistantText);
+          }
+        }
+      }
+
+      setHistory((prev) =>
+        prev.map((entry) =>
+          entry.id === newEntry.id ? { ...entry, assistant: assistantText } : entry
+        )
+      );
+      setStreamingText("");
+      setStatus("idle");
+    } catch (err) {
+      setStatus("idle");
+      setError(err.message || "Something went wrong.");
+      setStreamingText("");
+    }
+  };
+
+  return (
+    <div className="page">
+      <header className="hero">
+        <div>
+          <p className="hero-tag">Nyl home assistant</p>
+          <h1>Stay grounded, map your day, and think out loud.</h1>
+          <p className="hero-sub">
+            A calm workspace for planning, remembering, and exploring. Stream replies in real time
+            and keep your system prompt close.
+          </p>
+        </div>
+        <div className="hero-card">
+          <div className="hero-card-title">Model</div>
+          <select
+            value={selectedModel}
+            onChange={(event) => setSelectedModel(event.target.value)}
+            className="select"
+          >
+            {modelOptions.length === 0 && <option>Loading models...</option>}
+            {modelOptions.map((model) => (
+              <option key={model.id || model.name} value={model.name || model.id}>
+                {model.label}
+              </option>
+            ))}
+          </select>
+          <div className="hero-card-footer">Streaming from {API_BASE}</div>
+        </div>
+      </header>
+
+      <main className="main">
+        <section className="panel">
+          <div className="panel-header">
+            <h2>System guidance</h2>
+            <p>Keep the tone and intent explicit for every session.</p>
+          </div>
+          <textarea
+            className="textarea"
+            value={systemPrompt}
+            onChange={(event) => setSystemPrompt(event.target.value)}
+            rows={6}
+          />
+        </section>
+
+        <section className="panel chat">
+          <div className="panel-header">
+            <h2>Conversation</h2>
+            <p>{status === "streaming" ? "Streaming reply..." : "Ready for your next thought."}</p>
+          </div>
+          <div className="chat-stream" ref={scrollRef}>
+            {history.length === 0 && (
+              <div className="chat-empty">
+                <p>Start with a plan, a question, or a memory you want to capture.</p>
+              </div>
+            )}
+            {history.map((entry) => (
+              <div key={entry.id} className="chat-pair">
+                <div className="chat-bubble user">
+                  <span className="chat-label">You</span>
+                  <p>{entry.user}</p>
+                </div>
+                <div className="chat-bubble assistant">
+                  <span className="chat-label">Nyl</span>
+                  <p>{entry.assistant}</p>
+                </div>
+              </div>
+            ))}
+            {status === "streaming" && (
+              <div className="chat-bubble assistant live">
+                <span className="chat-label">Nyl</span>
+                <p>{streamingText || "..."}</p>
+              </div>
+            )}
+          </div>
+
+          <form className="composer" onSubmit={handleSubmit}>
+            <input
+              className="input"
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              placeholder="Ask Nyl to plan, organize, or reflect..."
+            />
+            <button className="button" type="submit" disabled={status === "streaming"}>
+              Send
+            </button>
+          </form>
+
+          {error && <div className="error">{error}</div>}
+        </section>
+      </main>
+    </div>
+  );
+}

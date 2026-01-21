@@ -9,3 +9,4 @@ KUSTOMIZE_PATH=${KUSTOMIZE_PATH:-Cluster/NylApi}
 "$REPO_ROOT/services/nyl-api/scripts/build-image.sh"
 
 microk8s kubectl apply -k "$REPO_ROOT/$KUSTOMIZE_PATH"
+microk8s kubectl rollout restart deployment/nyl-api

@@ -5,7 +5,14 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
-from .ollama import chat, get_ollama_client, list_models, stream_chat
+from .ollama import (
+    chat,
+    get_ollama_client,
+    list_models,
+    shutdown_ollama_client,
+    startup_ollama_client,
+    stream_chat,
+)
 from .schemas import ChatRequest
 
 app = FastAPI(title="Nyl API")
@@ -20,6 +27,16 @@ if cors_origins:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+
+@app.on_event("startup")
+async def startup() -> None:
+    await startup_ollama_client()
+
+
+@app.on_event("shutdown")
+async def shutdown() -> None:
+    await shutdown_ollama_client()
 
 
 @app.get("/health")
@@ -41,6 +58,9 @@ async def chat_completions(
         return StreamingResponse(
             stream_chat(request, client),
             media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache"},
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
         )
     return await chat(request, client)

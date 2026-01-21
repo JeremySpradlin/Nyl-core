@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nyl-frontend
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: nyl.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nyl-frontend
+                port:
+                  number: 80
