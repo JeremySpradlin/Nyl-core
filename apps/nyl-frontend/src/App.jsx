@@ -343,10 +343,15 @@ export default function App() {
                       }`}
                     >
                       <span className="chat-label">Nyl</span>
-                      <p>
-                        {entry.assistant ||
-                          (status === "streaming" && entry.id === streamingId ? "..." : "")}
-                      </p>
+                      {entry.assistant ? (
+                        <p>{entry.assistant}</p>
+                      ) : (
+                        <div className="typing-indicator" aria-label="Nyl is typing">
+                          <span />
+                          <span />
+                          <span />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -354,12 +359,13 @@ export default function App() {
             </div>
 
             <form className="composer" onSubmit={handleSubmit}>
-              <input
-                className="input"
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                placeholder="Ask Nyl to plan, organize, or reflect..."
-              />
+            <input
+              className="input"
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              placeholder="Ask Nyl to plan, organize, or reflect..."
+              autoFocus
+            />
               <button className="button" type="submit" disabled={status === "streaming"}>
                 Send
               </button>
