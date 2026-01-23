@@ -26,6 +26,17 @@ spec:
               value: http://ollama:11434
             - name: CORS_ALLOW_ORIGINS
               value: http://localhost:5173,http://localhost:3000,http://nyl.local
+            - name: POSTGRES_HOST
+              value: postgres
+            - name: POSTGRES_DB
+              value: nyl
+            - name: POSTGRES_USER
+              value: nyl
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
           readinessProbe:
             httpGet:
               path: /health
