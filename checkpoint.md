@@ -6,6 +6,7 @@
 - JupyterLab in `Cluster/JupyterLab` with GPU access, PVC for notebooks, hostPath datasets at `/home/erbun/data`, Ingress `jupyter.local`, and token auth via Secret.
 - Nyl API backend (FastAPI) in `services/nyl-api` with streaming chat, models endpoint, and K8s manifests in `Cluster/NylApi`.
 - Nyl frontend (Vite + React) in `apps/nyl-frontend` with streaming chat UI, model picker, and deployment manifests in `Cluster/NylFrontend`.
+- Postgres in `Cluster/Postgres` with PVC and a Secret-managed password.
 
 ## Files added/updated
 - `Cluster/Ollama/*` (default namespace): `deployment.yaml`, `service.yaml`, `ingress.yaml`, `pvc.yaml`, `models-configmap.yaml`, `pull-models-job.yaml`, `kustomization.yaml`, `README.md`.
@@ -52,6 +53,7 @@
   - `microk8s kubectl apply -k Cluster/JupyterLab`
   - `microk8s kubectl apply -k Cluster/NylApi`
   - `microk8s kubectl apply -k Cluster/NylFrontend`
+  - `microk8s kubectl apply -k Cluster/Postgres`
 - Streaming via ingress uses NGINX annotations in `Cluster/NylApi/ingress.yaml`.
 - If chat streaming fails, check `nyl-api` logs for `httpx.ReadTimeout` and redeploy API after updates.
 - Frontend chat history currently grows without a display cap; consider trimming rendered history or persisting to storage as usage increases.
