@@ -14,6 +14,11 @@ spec:
       labels:
         app: jupyterlab
     spec:
+      runtimeClassName: nvidia
+      nodeSelector:
+        nvidia.com/gpu.present: "true"
+        nvidia.com/gpu.deploy.device-plugin: "true"
+        nvidia.com/gpu.deploy.driver: "true"
       securityContext:
         runAsUser: 1000
         fsGroup: 1000
