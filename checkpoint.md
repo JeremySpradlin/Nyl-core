@@ -54,3 +54,4 @@
   - `microk8s kubectl apply -k Cluster/NylFrontend`
 - Streaming via ingress uses NGINX annotations in `Cluster/NylApi/ingress.yaml`.
 - If chat streaming fails, check `nyl-api` logs for `httpx.ReadTimeout` and redeploy API after updates.
+- Frontend chat history currently grows without a display cap; consider trimming rendered history or persisting to storage as usage increases.

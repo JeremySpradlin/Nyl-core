@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://api.nyl.local";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 
 const initialSystemPrompt =
   "You are Nyl, a steady, helpful home assistant. Be concise, thoughtful, and practical.";
+const MAX_HISTORY_TURNS = 12;
 
 const formatModelLabel = (name) => {
   if (!name) return "Unknown model";
@@ -47,10 +48,11 @@ const parseSseEvents = (buffer) => {
 
 const buildMessages = (systemPrompt, history, userMessage) => {
   const messages = [];
+  const recentHistory = history.slice(-MAX_HISTORY_TURNS);
   if (systemPrompt.trim()) {
     messages.push({ role: "system", content: systemPrompt.trim() });
   }
-  history.forEach((entry) => {
+  recentHistory.forEach((entry) => {
     messages.push({ role: "user", content: entry.user });
     if (entry.assistant) {
       messages.push({ role: "assistant", content: entry.assistant });
@@ -127,6 +129,7 @@ export default function App() {
         const data = await response.json();
         const list = data.models || [];
         setModels(list);
+        setError("");
         if (list.length && !selectedModel) {
           setSelectedModel(list[0].name || list[0].id);
         }
@@ -136,7 +139,7 @@ export default function App() {
     };
 
     loadModels();
-  }, [selectedModel]);
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -188,14 +191,16 @@ export default function App() {
     const userMessage = input.trim();
     setInput("");
 
+    const entryId = makeId();
     const newEntry = {
-      id: makeId(),
+      id: entryId,
       user: userMessage,
       assistant: ""
     };
     setHistory((prev) => [...prev, newEntry]);
     setStreamingId(newEntry.id);
 
+    let assistantText = "";
     try {
       const payload = {
         model: selectedModel,
@@ -218,8 +223,6 @@ export default function App() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      let assistantText = "";
-
       while (true) {
         const { value, done } = await reader.read();
         if (done) {
@@ -255,21 +258,31 @@ export default function App() {
       }
       setHistory((prev) =>
         prev.map((entry) =>
-          entry.id === newEntry.id ? { ...entry, assistant: assistantText } : entry
+          entry.id === entryId ? { ...entry, assistant: assistantText } : entry
         )
       );
       setStatus("idle");
       setStreamingId(null);
       abortRef.current = null;
     } catch (err) {
+      if (streamUpdateRef.current.timer) {
+        clearTimeout(streamUpdateRef.current.timer);
+        streamUpdateRef.current.timer = null;
+      }
+      streamUpdateRef.current.text = "";
+      setHistory((prev) =>
+        prev.map((entry) => (entry.id === entryId ? { ...entry, assistant: "" } : entry))
+      );
       if (err.name === "AbortError") {
         setStatus("idle");
         setStreamingId(null);
+        abortRef.current = null;
         return;
       }
       setStatus("idle");
       setError(err.message || "Something went wrong.");
       setStreamingId(null);
+      abortRef.current = null;
     }
   };
 
