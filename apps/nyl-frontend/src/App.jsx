@@ -10,6 +10,8 @@ const initialSystemPrompt =
   "You are Nyl, a steady, helpful home assistant. Be concise, thoughtful, and practical.";
 const MAX_HISTORY_TURNS = 12;
 const DEFAULT_ACCENT = "#d07a4a";
+const DEFAULT_DOC = { type: "doc", content: [] };
+const AUTOSAVE_DELAY_MS = 900;
 
 const formatModelLabel = (name) => {
   if (!name) return "Unknown model";
@@ -84,6 +86,16 @@ const formatApiDate = (date) => {
   return `${year}-${month}-${day}`;
 };
 
+const normalizeDoc = (body) => {
+  if (!body || typeof body !== "object") {
+    return DEFAULT_DOC;
+  }
+  if (!body.type) {
+    return DEFAULT_DOC;
+  }
+  return body;
+};
+
 const formatDisplayDate = (date) =>
   date.toLocaleDateString("en-US", {
     weekday: "long",
@@ -152,14 +164,29 @@ export default function App() {
   const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT);
   const [selectedDate, setSelectedDate] = useState(todayStart);
   const [isJournalOpen, setIsJournalOpen] = useState(false);
+  const [journalEntryId, setJournalEntryId] = useState(null);
+  const [journalTitle, setJournalTitle] = useState("");
+  const [journalBody, setJournalBody] = useState(DEFAULT_DOC);
+  const [journalStatus, setJournalStatus] = useState("idle");
+  const [journalError, setJournalError] = useState("");
+  const [journalSavedAt, setJournalSavedAt] = useState(null);
   const scrollRef = useRef(null);
   const abortRef = useRef(null);
   const historyRef = useRef(history);
   const streamUpdateRef = useRef({ timer: null, text: "" });
+  const saveTimerRef = useRef(null);
+  const lastSavedRef = useRef({ title: "", body: DEFAULT_DOC });
+  const isSettingContentRef = useRef(false);
 
   const editor = useEditor({
     extensions: [StarterKit],
-    content: { type: "doc", content: [] }
+    content: DEFAULT_DOC,
+    onUpdate: ({ editor: currentEditor }) => {
+      if (isSettingContentRef.current) {
+        return;
+      }
+      setJournalBody(currentEditor.getJSON());
+    }
   });
 
   const modelOptions = useMemo(() => {
@@ -418,6 +445,130 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    if (!isJournalOpen) {
+      return;
+    }
+    let isActive = true;
+    const loadEntry = async () => {
+      setJournalStatus("loading");
+      setJournalError("");
+      try {
+        const response = await fetch(`${API_BASE}/v1/journal/entries/ensure`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            journal_date: formatApiDate(selectedDate),
+            scope: "daily",
+            title: null,
+            body: DEFAULT_DOC,
+            tags: null
+          })
+        });
+        if (!response.ok) {
+          throw new Error("Failed to load journal entry.");
+        }
+        const entry = await response.json();
+        if (!isActive) {
+          return;
+        }
+        const nextTitle = entry.title || "";
+        const nextBody = normalizeDoc(entry.body);
+        setJournalEntryId(entry.id);
+        setJournalTitle(nextTitle);
+        setJournalBody(nextBody);
+        lastSavedRef.current = { title: nextTitle, body: nextBody };
+        setJournalSavedAt(new Date());
+        setJournalStatus("saved");
+        if (editor) {
+          isSettingContentRef.current = true;
+          editor.commands.setContent(nextBody, false);
+          isSettingContentRef.current = false;
+        }
+      } catch (err) {
+        if (!isActive) {
+          return;
+        }
+        setJournalStatus("error");
+        setJournalError(err.message || "Failed to load journal entry.");
+      }
+    };
+
+    loadEntry();
+
+    return () => {
+      isActive = false;
+    };
+  }, [isJournalOpen, selectedDate, editor]);
+
+  useEffect(() => {
+    if (!isJournalOpen || !journalEntryId) {
+      return;
+    }
+    const current = { title: journalTitle, body: journalBody };
+    const last = lastSavedRef.current;
+    const isSame =
+      current.title === last.title &&
+      JSON.stringify(current.body) === JSON.stringify(last.body);
+    if (isSame) {
+      if (journalStatus !== "saved") {
+        setJournalStatus("saved");
+      }
+      return;
+    }
+    setJournalStatus("saving");
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+    saveTimerRef.current = setTimeout(async () => {
+      saveTimerRef.current = null;
+      try {
+        const response = await fetch(`${API_BASE}/v1/journal/entries/${journalEntryId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: journalTitle || null,
+            body: journalBody
+          })
+        });
+        if (!response.ok) {
+          throw new Error("Failed to save journal entry.");
+        }
+        lastSavedRef.current = current;
+        setJournalSavedAt(new Date());
+        setJournalStatus("saved");
+      } catch (err) {
+        setJournalStatus("error");
+        setJournalError(err.message || "Failed to save journal entry.");
+      }
+    }, AUTOSAVE_DELAY_MS);
+  }, [journalTitle, journalBody, journalEntryId, isJournalOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const journalStatusLabel = useMemo(() => {
+    if (journalStatus === "loading") return "Loading...";
+    if (journalStatus === "saving") return "Saving...";
+    if (journalStatus === "error") return "Save failed";
+    if (journalStatus === "saved") return "Saved";
+    return "Idle";
+  }, [journalStatus]);
+
+  const journalSavedLabel = useMemo(() => {
+    if (!journalSavedAt) return "No save yet";
+    return `Saved at ${journalSavedAt.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit"
+    })}`;
+  }, [journalSavedAt]);
+
   return (
     <div className="page">
       <div className="top-nav">
@@ -573,17 +724,23 @@ export default function App() {
             onClick={() => setIsJournalOpen(false)}
           />
           <aside className="journal-drawer" role="dialog" aria-label="Journal entry">
-            <div className="journal-header">
-              <div>
-                <p className="journal-eyebrow">Daily journal</p>
-                <h2>{formatDisplayDate(selectedDate)}</h2>
-                <p>Writing view will live here. We can wire in the editor next.</p>
-              </div>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="Close journal"
-                onClick={() => setIsJournalOpen(false)}
+              <div className="journal-header">
+                <div>
+                  <p className="journal-eyebrow">Daily journal</p>
+                  <h2>{formatDisplayDate(selectedDate)}</h2>
+                  <p>Your entry saves automatically as you type.</p>
+                </div>
+                <div className="journal-status">
+                  <span className={`journal-pill journal-${journalStatus}`}>
+                    {journalStatusLabel}
+                  </span>
+                  <span className="journal-meta">{journalSavedLabel}</span>
+                </div>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="Close journal"
+                  onClick={() => setIsJournalOpen(false)}
               >
                 <span aria-hidden="true">✕</span>
               </button>
@@ -595,6 +752,8 @@ export default function App() {
                   className="journal-input"
                   type="text"
                   placeholder="Give the day a headline"
+                  value={journalTitle}
+                  onChange={(event) => setJournalTitle(event.target.value)}
                 />
               </label>
               <div className="journal-field">
@@ -607,6 +766,7 @@ export default function App() {
                 <span className="journal-label">Tags</span>
                 <div className="journal-placeholder">Tags input will live here later.</div>
               </div>
+              {journalError && <div className="error">{journalError}</div>}
             </div>
           </aside>
         </div>

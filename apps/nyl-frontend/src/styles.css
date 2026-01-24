@@ -597,15 +597,14 @@ html[data-theme="dark"] .journal-label {
   color: rgba(245, 239, 231, 0.72);
 }
 
-html[data-theme="dark"] .journal-field {
-  background: rgba(27, 26, 24, 0.6);
-  border-color: rgba(245, 239, 231, 0.2);
-}
-
 html[data-theme="dark"] .journal-editor .ProseMirror {
   background: rgba(27, 26, 24, 0.92);
   border-color: rgba(245, 239, 231, 0.12);
   color: var(--ink);
+}
+
+html[data-theme="dark"] .journal-pill {
+  color: var(--accent);
 }
 
 .settings-overlay {
@@ -647,6 +646,44 @@ html[data-theme="dark"] .journal-editor .ProseMirror {
   justify-content: space-between;
   gap: 16px;
   align-items: flex-start;
+}
+
+.journal-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  text-align: right;
+}
+
+.journal-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  background: rgba(208, 122, 74, 0.12);
+  color: var(--accent-dark);
+}
+
+.journal-saving {
+  background: rgba(208, 122, 74, 0.2);
+}
+
+.journal-error {
+  background: rgba(176, 60, 60, 0.18);
+  color: #7a2a2a;
+}
+
+.journal-meta {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
 }
 
 .journal-header h2 {
@@ -704,6 +741,11 @@ html[data-theme="dark"] .journal-editor .ProseMirror {
   background: #fffdf9;
   color: var(--ink);
   outline: none;
+}
+
+.journal-input:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring);
 }
 
 .journal-tags {

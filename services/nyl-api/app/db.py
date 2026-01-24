@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 from datetime import date
@@ -12,6 +13,16 @@ _logger = logging.getLogger(__name__)
 
 DB_CONNECT_RETRIES = int(os.getenv("DB_CONNECT_RETRIES", "10"))
 DB_CONNECT_DELAY = float(os.getenv("DB_CONNECT_DELAY", "2"))
+
+
+async def _init_connection(conn: asyncpg.Connection) -> None:
+    await conn.set_type_codec(
+        "jsonb",
+        encoder=json.dumps,
+        decoder=json.loads,
+        schema="pg_catalog",
+        format="text",
+    )
 
 
 def _build_database_url() -> str:
@@ -32,7 +43,9 @@ async def startup_db() -> None:
     last_error: Exception | None = None
     for attempt in range(1, DB_CONNECT_RETRIES + 1):
         try:
-            _db_pool = await asyncpg.create_pool(dsn=_build_database_url())
+            _db_pool = await asyncpg.create_pool(
+                dsn=_build_database_url(), init=_init_connection
+            )
             async with _db_pool.acquire() as conn:
                 await conn.execute(
                     """
