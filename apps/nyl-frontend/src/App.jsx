@@ -115,6 +115,7 @@ const makeId = () => {
 
 export default function App() {
   const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [systemPrompt, setSystemPrompt] = useState(initialSystemPrompt);
@@ -126,6 +127,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [theme, setTheme] = useState("light");
   const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT);
+  const [selectedDate, setSelectedDate] = useState(todayStart);
   const scrollRef = useRef(null);
   const abortRef = useRef(null);
   const historyRef = useRef(history);
@@ -368,10 +370,9 @@ export default function App() {
       return;
     }
     const clicked = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const label = formatApiDate(clicked);
     if (clicked <= todayStart) {
+      setSelectedDate(clicked);
       console.log(`Open journal for ${label}`);
     } else {
       console.log(`Future date ${label} not openable`);
@@ -413,6 +414,7 @@ export default function App() {
               <div className="calendar-body">
                 <DayPicker
                   mode="single"
+                  selected={selectedDate}
                   onDayClick={handleCalendarClick}
                   modifiers={{ future: { after: today }, today: today }}
                   modifiersClassNames={{
@@ -420,6 +422,9 @@ export default function App() {
                     today: "calendar-today"
                   }}
                 />
+              </div>
+              <div className="calendar-meta">
+                Selected: {formatApiDate(selectedDate)}
               </div>
             </div>
             <div className="hero-card">

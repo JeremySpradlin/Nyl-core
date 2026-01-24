@@ -170,6 +170,14 @@ body {
   place-items: center;
 }
 
+.calendar-meta {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
 .calendar-card .rdp {
   --rdp-cell-size: 34px;
   --rdp-caption-font-size: 0.85rem;
