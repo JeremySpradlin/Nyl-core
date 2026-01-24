@@ -864,6 +864,58 @@ export default function App() {
                 <span className="journal-label" id="journal-body-label">
                   Body
                 </span>
+                <div className="journal-toolbar" role="toolbar" aria-label="Journal formatting">
+                  <button
+                    type="button"
+                    className={`journal-tool${editor?.isActive("bold") ? " active" : ""}`}
+                    onClick={() => editor?.chain().focus().toggleBold().run()}
+                    disabled={!editor?.can().chain().focus().toggleBold().run()}
+                    aria-pressed={editor?.isActive("bold") || false}
+                  >
+                    B
+                  </button>
+                  <button
+                    type="button"
+                    className={`journal-tool${editor?.isActive("italic") ? " active" : ""}`}
+                    onClick={() => editor?.chain().focus().toggleItalic().run()}
+                    disabled={!editor?.can().chain().focus().toggleItalic().run()}
+                    aria-pressed={editor?.isActive("italic") || false}
+                  >
+                    I
+                  </button>
+                  <button
+                    type="button"
+                    className={`journal-tool${editor?.isActive("heading", { level: 2 }) ? " active" : ""}`}
+                    onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
+                    aria-pressed={editor?.isActive("heading", { level: 2 }) || false}
+                  >
+                    H2
+                  </button>
+                  <button
+                    type="button"
+                    className={`journal-tool${editor?.isActive("heading", { level: 3 }) ? " active" : ""}`}
+                    onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}
+                    aria-pressed={editor?.isActive("heading", { level: 3 }) || false}
+                  >
+                    H3
+                  </button>
+                  <button
+                    type="button"
+                    className={`journal-tool${editor?.isActive("bulletList") ? " active" : ""}`}
+                    onClick={() => editor?.chain().focus().toggleBulletList().run()}
+                    aria-pressed={editor?.isActive("bulletList") || false}
+                  >
+                    List
+                  </button>
+                  <button
+                    type="button"
+                    className={`journal-tool${editor?.isActive("blockquote") ? " active" : ""}`}
+                    onClick={() => editor?.chain().focus().toggleBlockquote().run()}
+                    aria-pressed={editor?.isActive("blockquote") || false}
+                  >
+                    Quote
+                  </button>
+                </div>
                 <div className="journal-editor">
                   <EditorContent editor={editor} />
                 </div>
