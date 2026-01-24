@@ -860,7 +860,7 @@ export default function App() {
                   ref={journalTitleRef}
                 />
               </label>
-              <div className="journal-field">
+              <div className="journal-field journal-body">
                 <span className="journal-label" id="journal-body-label">
                   Body
                 </span>
