@@ -158,59 +158,45 @@ body {
   gap: 16px;
 }
 
-.calendar-header {
+.calendar-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.calendar-body {
+  display: grid;
+  place-items: center;
+}
+
+.calendar-card .rdp {
+  --rdp-cell-size: 34px;
+  --rdp-caption-font-size: 0.85rem;
+  --rdp-accent-color: var(--accent);
+  --rdp-background-color: var(--surface);
+  margin: 0;
+}
+
+.calendar-card .rdp-caption_label {
   font-family: "IBM Plex Mono", monospace;
-  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.2em;
   color: var(--muted);
 }
 
-.calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.calendar-weekday {
+.calendar-card .rdp-day {
   font-family: "IBM Plex Mono", monospace;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--muted);
-  text-align: center;
+  font-size: 0.85rem;
+  border-radius: 10px;
 }
 
-.calendar-cell {
-  border: 1px solid transparent;
-  border-radius: 12px;
-  padding: 8px 0;
-  font-family: "IBM Plex Mono", monospace;
-  font-size: 12px;
-  text-align: center;
-  background: #fffdf9;
-  color: var(--ink);
-}
-
-.calendar-day {
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.calendar-day:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(29, 27, 22, 0.12);
-  border-color: rgba(29, 27, 22, 0.12);
-}
-
-.calendar-empty {
-  background: transparent;
-  border-color: transparent;
-  cursor: default;
+.calendar-card .rdp-day:hover {
+  background: rgba(208, 122, 74, 0.12);
 }
 
 .calendar-today {
-  border-color: var(--accent);
+  border: 1px solid var(--accent);
   box-shadow: 0 0 0 2px var(--ring);
 }
 

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DayPicker } from "react-day-picker";
+import "react-day-picker/dist/style.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 
@@ -30,28 +32,6 @@ const formatApiDate = (date) => {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-};
-
-const buildCalendarDays = (year, month) => {
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  const offset = firstDay.getDay();
-  const totalDays = lastDay.getDate();
-  const cells = [];
-
-  for (let i = 0; i < offset; i += 1) {
-    cells.push(null);
-  }
-
-  for (let day = 1; day <= totalDays; day += 1) {
-    cells.push(new Date(year, month, day));
-  }
-
-  while (cells.length % 7 !== 0) {
-    cells.push(null);
-  }
-
-  return cells;
 };
 
 const parseSseEvents = (buffer) => {
@@ -100,14 +80,6 @@ const makeId = () => {
 
 export default function App() {
   const today = new Date();
-  const calendarYear = today.getFullYear();
-  const calendarMonth = today.getMonth();
-  const calendarDays = buildCalendarDays(calendarYear, calendarMonth);
-  const calendarLabel = today.toLocaleDateString("en-US", {
-    month: "long",
-    year: "numeric"
-  });
-
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [systemPrompt, setSystemPrompt] = useState(initialSystemPrompt);
@@ -375,44 +347,19 @@ export default function App() {
           </div>
           <div className="hero-side">
             <div className="hero-card calendar-card">
-              <div className="hero-card-title">Calendar</div>
-              <div className="calendar-header">{calendarLabel}</div>
-              <div className="calendar-grid">
-                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                  <div key={day} className="calendar-weekday">
-                    {day}
-                  </div>
-                ))}
-                {calendarDays.map((date, index) => {
-                  const isToday =
-                    date &&
-                    date.getFullYear() === today.getFullYear() &&
-                    date.getMonth() === today.getMonth() &&
-                    date.getDate() === today.getDate();
-                  const isFuture =
-                    date &&
-                    new Date(date.getFullYear(), date.getMonth(), date.getDate()) >
-                      new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                  const className = [
-                    "calendar-cell",
-                    date ? "calendar-day" : "calendar-empty",
-                    isToday ? "calendar-today" : "",
-                    isFuture ? "calendar-future" : ""
-                  ]
-                    .filter(Boolean)
-                    .join(" ");
-                  return (
-                    <button
-                      key={index}
-                      type="button"
-                      className={className}
-                      onClick={() => handleCalendarClick(date)}
-                      disabled={!date}
-                    >
-                      {date ? date.getDate() : ""}
-                    </button>
-                  );
-                })}
+              <div className="calendar-card-header">
+                <div className="hero-card-title">Calendar</div>
+              </div>
+              <div className="calendar-body">
+                <DayPicker
+                  mode="single"
+                  onDayClick={handleCalendarClick}
+                  modifiers={{ future: { after: today }, today: today }}
+                  modifiersClassNames={{
+                    future: "calendar-future",
+                    today: "calendar-today"
+                  }}
+                />
               </div>
             </div>
             <div className="hero-card">
