@@ -562,6 +562,9 @@ html[data-theme="dark"] .chat-bubble,
 html[data-theme="dark"] .status-value,
 html[data-theme="dark"] .settings-placeholder,
 html[data-theme="dark"] .settings-card,
+html[data-theme="dark"] .journal-drawer,
+html[data-theme="dark"] .journal-input,
+html[data-theme="dark"] .journal-textarea,
 html[data-theme="dark"] .textarea,
 html[data-theme="dark"] .select,
 html[data-theme="dark"] .input {
@@ -587,8 +590,15 @@ html[data-theme="dark"] .panel-header p,
 html[data-theme="dark"] .hero-sub,
 html[data-theme="dark"] .settings-header p,
 html[data-theme="dark"] .status-label,
-html[data-theme="dark"] .settings-sub {
+html[data-theme="dark"] .settings-sub,
+html[data-theme="dark"] .journal-header p,
+html[data-theme="dark"] .journal-label {
   color: rgba(245, 239, 231, 0.72);
+}
+
+html[data-theme="dark"] .journal-field {
+  background: rgba(27, 26, 24, 0.6);
+  border-color: rgba(245, 239, 231, 0.2);
 }
 
 .settings-overlay {
@@ -597,6 +607,115 @@ html[data-theme="dark"] .settings-sub {
   z-index: 20;
   display: grid;
   grid-template-columns: 1fr minmax(320px, 420px);
+}
+
+.journal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 18;
+  display: grid;
+  grid-template-columns: 1fr minmax(50vw, 760px);
+}
+
+.journal-scrim {
+  border: none;
+  background: rgba(29, 27, 22, 0.4);
+  cursor: pointer;
+}
+
+.journal-drawer {
+  background: var(--surface);
+  height: 100%;
+  box-shadow: -24px 0 60px rgba(29, 27, 22, 0.2);
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  animation: slideIn 0.25s ease-out;
+  border-left: 1px solid rgba(29, 27, 22, 0.08);
+}
+
+.journal-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.journal-header h2 {
+  margin: 6px 0 8px;
+  font-size: 1.8rem;
+}
+
+.journal-header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.journal-eyebrow {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--accent-dark);
+  margin: 0;
+}
+
+.journal-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.journal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.journal-label {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+}
+
+.journal-placeholder {
+  color: var(--ink);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.journal-input {
+  border: 1px solid rgba(29, 27, 22, 0.12);
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-family: "Fraunces", serif;
+  font-size: 1.05rem;
+  background: #fffdf9;
+  color: var(--ink);
+  outline: none;
+}
+
+.journal-textarea {
+  border: 1px solid rgba(29, 27, 22, 0.12);
+  border-radius: 16px;
+  padding: 14px 16px;
+  font-family: "Fraunces", serif;
+  font-size: 1rem;
+  background: #fffdf9;
+  color: var(--ink);
+  outline: none;
+  resize: vertical;
+  min-height: 240px;
+}
+
+.journal-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .settings-scrim {
@@ -738,6 +857,15 @@ html[data-theme="dark"] .settings-sub {
 
   .settings-drawer {
     width: min(92vw, 420px);
+    justify-self: end;
+  }
+
+  .journal-overlay {
+    grid-template-columns: 1fr;
+  }
+
+  .journal-drawer {
+    width: min(96vw, 720px);
     justify-self: end;
   }
 }

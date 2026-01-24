@@ -69,6 +69,14 @@ const formatApiDate = (date) => {
   return `${year}-${month}-${day}`;
 };
 
+const formatDisplayDate = (date) =>
+  date.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric"
+  });
+
 const parseSseEvents = (buffer) => {
   const events = [];
   const chunks = buffer.replace(/\r/g, "").split("\n\n");
@@ -128,6 +136,7 @@ export default function App() {
   const [theme, setTheme] = useState("light");
   const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT);
   const [selectedDate, setSelectedDate] = useState(todayStart);
+  const [isJournalOpen, setIsJournalOpen] = useState(false);
   const scrollRef = useRef(null);
   const abortRef = useRef(null);
   const historyRef = useRef(history);
@@ -373,6 +382,7 @@ export default function App() {
     const label = formatApiDate(clicked);
     if (clicked <= todayStart) {
       setSelectedDate(clicked);
+      setIsJournalOpen(true);
       console.log(`Open journal for ${label}`);
     } else {
       console.log(`Future date ${label} not openable`);
@@ -524,6 +534,58 @@ export default function App() {
           </section>
         </main>
       </div>
+
+      {isJournalOpen && (
+        <div className="journal-overlay" role="presentation">
+          <button
+            type="button"
+            className="journal-scrim"
+            aria-label="Close journal"
+            onClick={() => setIsJournalOpen(false)}
+          />
+          <aside className="journal-drawer" role="dialog" aria-label="Journal entry">
+            <div className="journal-header">
+              <div>
+                <p className="journal-eyebrow">Daily journal</p>
+                <h2>{formatDisplayDate(selectedDate)}</h2>
+                <p>Writing view will live here. We can wire in the editor next.</p>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Close journal"
+                onClick={() => setIsJournalOpen(false)}
+              >
+                <span aria-hidden="true">✕</span>
+              </button>
+            </div>
+            <div className="journal-shell">
+              <label className="journal-field">
+                <span className="journal-label">Title</span>
+                <input
+                  className="journal-input"
+                  type="text"
+                  placeholder="Give the day a headline"
+                  disabled
+                />
+              </label>
+              <label className="journal-field">
+                <span className="journal-label">Body</span>
+                <textarea
+                  className="journal-textarea"
+                  placeholder="Start writing here. We'll wire up the editor next."
+                  rows={14}
+                  disabled
+                />
+              </label>
+              <div className="journal-tags">
+                <span className="journal-label">Tags</span>
+                <div className="journal-placeholder">Tags input will live here later.</div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
 
       {isSettingsOpen && (
         <div className="settings-overlay" role="presentation">
