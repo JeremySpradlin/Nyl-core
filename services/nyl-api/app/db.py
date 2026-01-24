@@ -42,9 +42,15 @@ async def startup_db() -> None:
                         journal_date date NOT NULL,
                         scope text NOT NULL,
                         title text,
-                        body text NOT NULL,
+                        body jsonb NOT NULL,
                         tags text[]
                     )
+                    """
+                )
+                await conn.execute(
+                    """
+                    ALTER TABLE journal_entries
+                    ALTER COLUMN body TYPE jsonb USING to_jsonb(body)
                     """
                 )
                 await conn.execute(
@@ -97,7 +103,7 @@ async def create_journal_entry(
     journal_date: date,
     scope: str,
     title: str | None,
-    body: str,
+    body: dict[str, Any],
     tags: list[str] | None,
 ) -> dict[str, Any]:
     entry_id = uuid4()
@@ -169,7 +175,7 @@ async def ensure_journal_entry(
     journal_date: date,
     scope: str,
     title: str | None,
-    body: str,
+    body: dict[str, Any],
     tags: list[str] | None,
 ) -> dict[str, Any]:
     row = await pool.fetchrow(

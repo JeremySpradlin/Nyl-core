@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DayPicker } from "react-day-picker";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
 import "react-day-picker/dist/style.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
@@ -154,6 +156,11 @@ export default function App() {
   const abortRef = useRef(null);
   const historyRef = useRef(history);
   const streamUpdateRef = useRef({ timer: null, text: "" });
+
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: { type: "doc", content: [] }
+  });
 
   const modelOptions = useMemo(() => {
     return models.map((model) => ({
@@ -588,18 +595,14 @@ export default function App() {
                   className="journal-input"
                   type="text"
                   placeholder="Give the day a headline"
-                  disabled
                 />
               </label>
-              <label className="journal-field">
+              <div className="journal-field">
                 <span className="journal-label">Body</span>
-                <textarea
-                  className="journal-textarea"
-                  placeholder="Start writing here. We'll wire up the editor next."
-                  rows={14}
-                  disabled
-                />
-              </label>
+                <div className="journal-editor">
+                  <EditorContent editor={editor} />
+                </div>
+              </div>
               <div className="journal-tags">
                 <span className="journal-label">Tags</span>
                 <div className="journal-placeholder">Tags input will live here later.</div>

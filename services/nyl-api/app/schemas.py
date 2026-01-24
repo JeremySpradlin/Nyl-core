@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -30,7 +30,7 @@ class JournalEntryCreate(BaseModel):
     journal_date: date
     scope: Scope
     title: str | None = None
-    body: str
+    body: dict[str, Any]
     tags: list[str] | None = None
 
 
@@ -38,13 +38,13 @@ class JournalEntryEnsure(BaseModel):
     journal_date: date
     scope: Scope
     title: str | None = None
-    body: str = ""
+    body: dict[str, Any] = Field(default_factory=dict)
     tags: list[str] | None = None
 
 
 class JournalEntryUpdate(BaseModel):
     title: str | None = None
-    body: str | None = None
+    body: dict[str, Any] | None = None
     tags: list[str] | None = None
 
 
@@ -54,5 +54,5 @@ class JournalEntry(BaseModel):
     journal_date: date
     scope: Scope
     title: str | None = None
-    body: str
+    body: dict[str, Any]
     tags: list[str] | None = None

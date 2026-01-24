@@ -20,7 +20,7 @@ async def test_create_journal_entry(monkeypatch):
             "journal_date": date(2024, 1, 1),
             "scope": "daily",
             "title": "Morning",
-            "body": "Started the day.",
+            "body": {"type": "doc", "content": []},
             "tags": ["routine"],
         }
 
@@ -29,7 +29,7 @@ async def test_create_journal_entry(monkeypatch):
         journal_date=date(2024, 1, 1),
         scope="daily",
         title="Morning",
-        body="Started the day.",
+        body={"type": "doc", "content": []},
         tags=["routine"],
     )
 
@@ -48,7 +48,7 @@ async def test_list_journal_entries(monkeypatch):
             "journal_date": date(2024, 1, 2),
             "scope": "project:nyl",
             "title": None,
-            "body": "Planning.",
+            "body": {"type": "doc", "content": []},
             "tags": None,
         }
     ]
@@ -78,6 +78,6 @@ def test_scope_validation():
             journal_date=date(2024, 1, 1),
             scope="bad-scope",
             title=None,
-            body="bad",
+            body={"type": "doc", "content": []},
             tags=None,
         )

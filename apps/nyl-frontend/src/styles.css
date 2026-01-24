@@ -566,7 +566,6 @@ html[data-theme="dark"] .settings-placeholder,
 html[data-theme="dark"] .settings-card,
 html[data-theme="dark"] .journal-drawer,
 html[data-theme="dark"] .journal-input,
-html[data-theme="dark"] .journal-textarea,
 html[data-theme="dark"] .textarea,
 html[data-theme="dark"] .select,
 html[data-theme="dark"] .input {
@@ -601,6 +600,12 @@ html[data-theme="dark"] .journal-label {
 html[data-theme="dark"] .journal-field {
   background: rgba(27, 26, 24, 0.6);
   border-color: rgba(245, 239, 231, 0.2);
+}
+
+html[data-theme="dark"] .journal-editor .ProseMirror {
+  background: rgba(27, 26, 24, 0.92);
+  border-color: rgba(245, 239, 231, 0.12);
+  color: var(--ink);
 }
 
 .settings-overlay {
@@ -701,7 +706,13 @@ html[data-theme="dark"] .journal-field {
   outline: none;
 }
 
-.journal-textarea {
+.journal-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.journal-editor .ProseMirror {
   border: 1px solid rgba(29, 27, 22, 0.12);
   border-radius: 16px;
   padding: 14px 16px;
@@ -710,14 +721,12 @@ html[data-theme="dark"] .journal-field {
   background: #fffdf9;
   color: var(--ink);
   outline: none;
-  resize: vertical;
   min-height: 240px;
 }
 
-.journal-tags {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.journal-editor .ProseMirror:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring);
 }
 
 .settings-scrim {
