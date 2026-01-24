@@ -22,6 +22,7 @@ from .db import (
 from .ollama import (
     chat,
     get_ollama_client,
+    is_allowed_chat_model,
     list_models,
     shutdown_ollama_client,
     startup_ollama_client,
@@ -77,6 +78,8 @@ async def chat_completions(
     request: ChatRequest,
     client: httpx.AsyncClient = Depends(get_ollama_client),
 ):
+    if not is_allowed_chat_model(request.model):
+        raise HTTPException(status_code=400, detail="Model is not allowed for chat")
     if request.stream:
         return StreamingResponse(
             stream_chat(request, client),

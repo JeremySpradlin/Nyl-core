@@ -12,6 +12,12 @@ from .schemas import ChatRequest
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
 OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "30"))
 _ollama_client: httpx.AsyncClient | None = None
+CHAT_MODEL_ALLOWLIST = [
+    model.strip()
+    for model in os.getenv("CHAT_MODEL_ALLOWLIST", "").split(",")
+    if model.strip()
+]
+DEFAULT_CHAT_MODEL = os.getenv("DEFAULT_CHAT_MODEL", "").strip() or None
 
 
 def _ollama_timeout() -> httpx.Timeout:
@@ -42,6 +48,33 @@ def get_ollama_client() -> httpx.AsyncClient:
     return _ollama_client
 
 
+def _model_name(model: dict[str, Any]) -> str:
+    return model.get("name") or model.get("id") or ""
+
+
+def _is_embedding_model(model_name: str) -> bool:
+    lowered = model_name.lower()
+    return "embed" in lowered or "embedding" in lowered
+
+
+def is_allowed_chat_model(model_name: str) -> bool:
+    if CHAT_MODEL_ALLOWLIST:
+        return model_name in CHAT_MODEL_ALLOWLIST
+    return not _is_embedding_model(model_name)
+
+
+def _filter_chat_models(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if CHAT_MODEL_ALLOWLIST:
+        return [model for model in models if _model_name(model) in CHAT_MODEL_ALLOWLIST]
+    return [model for model in models if not _is_embedding_model(_model_name(model))]
+
+
+def _choose_default_model(models: list[dict[str, Any]]) -> str | None:
+    if DEFAULT_CHAT_MODEL and DEFAULT_CHAT_MODEL in {_model_name(model) for model in models}:
+        return DEFAULT_CHAT_MODEL
+    return _model_name(models[0]) if models else None
+
+
 async def list_models(client: httpx.AsyncClient = Depends(get_ollama_client)) -> dict[str, Any]:
     response = await client.get("/api/tags")
     if response.status_code != 200:
@@ -56,7 +89,11 @@ async def list_models(client: httpx.AsyncClient = Depends(get_ollama_client)) ->
         }
         for model in payload.get("models", [])
     ]
-    return {"models": models}
+    chat_models = _filter_chat_models(models)
+    return {
+        "models": chat_models,
+        "default_model": _choose_default_model(chat_models),
+    }
 
 
 def _build_chunk(delta: dict[str, Any], chunk_id: str) -> str:

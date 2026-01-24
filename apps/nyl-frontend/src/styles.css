@@ -115,6 +115,12 @@ body {
   animation: fadeIn 0.8s ease-out;
 }
 
+.hero-side {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
 .hero-tag {
   font-family: "IBM Plex Mono", monospace;
   font-size: 12px;
@@ -146,6 +152,70 @@ body {
   flex-direction: column;
   gap: 12px;
   animation: riseIn 0.9s ease-out;
+}
+
+.calendar-card {
+  gap: 16px;
+}
+
+.calendar-header {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.calendar-weekday {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--muted);
+  text-align: center;
+}
+
+.calendar-cell {
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 8px 0;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  text-align: center;
+  background: #fffdf9;
+  color: var(--ink);
+}
+
+.calendar-day {
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.calendar-day:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(29, 27, 22, 0.12);
+  border-color: rgba(29, 27, 22, 0.12);
+}
+
+.calendar-empty {
+  background: transparent;
+  border-color: transparent;
+  cursor: default;
+}
+
+.calendar-today {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.calendar-future {
+  opacity: 0.55;
 }
 
 .hero-card-title {

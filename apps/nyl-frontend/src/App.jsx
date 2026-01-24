@@ -25,6 +25,35 @@ const formatModelLabel = (name) => {
   return sizeToken ? label.replace(sizeToken, sizeToken.toUpperCase()) : label;
 };
 
+const formatApiDate = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const buildCalendarDays = (year, month) => {
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const offset = firstDay.getDay();
+  const totalDays = lastDay.getDate();
+  const cells = [];
+
+  for (let i = 0; i < offset; i += 1) {
+    cells.push(null);
+  }
+
+  for (let day = 1; day <= totalDays; day += 1) {
+    cells.push(new Date(year, month, day));
+  }
+
+  while (cells.length % 7 !== 0) {
+    cells.push(null);
+  }
+
+  return cells;
+};
+
 const parseSseEvents = (buffer) => {
   const events = [];
   const chunks = buffer.replace(/\r/g, "").split("\n\n");
@@ -70,6 +99,15 @@ const makeId = () => {
 };
 
 export default function App() {
+  const today = new Date();
+  const calendarYear = today.getFullYear();
+  const calendarMonth = today.getMonth();
+  const calendarDays = buildCalendarDays(calendarYear, calendarMonth);
+  const calendarLabel = today.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric"
+  });
+
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [systemPrompt, setSystemPrompt] = useState(initialSystemPrompt);
@@ -128,10 +166,17 @@ export default function App() {
         }
         const data = await response.json();
         const list = data.models || [];
+        const defaultModel = data.default_model;
+        const modelNames = new Set(list.map((model) => model.name || model.id));
         setModels(list);
         setError("");
-        if (list.length && !selectedModel) {
-          setSelectedModel(list[0].name || list[0].id);
+        const hasSelected = selectedModel && modelNames.has(selectedModel);
+        if (!hasSelected && list.length) {
+          const nextModel =
+            (defaultModel && modelNames.has(defaultModel) && defaultModel) ||
+            list[0].name ||
+            list[0].id;
+          setSelectedModel(nextModel);
         }
       } catch (err) {
         setError(err.message || "Failed to load models.");
@@ -286,6 +331,21 @@ export default function App() {
     }
   };
 
+  const handleCalendarClick = (date) => {
+    if (!date) {
+      return;
+    }
+    const clicked = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const label = formatApiDate(clicked);
+    if (clicked <= todayStart) {
+      console.log(`Open journal for ${label}`);
+    } else {
+      console.log(`Future date ${label} not openable`);
+    }
+  };
+
   return (
     <div className="page">
       <div className="top-nav">
@@ -313,21 +373,64 @@ export default function App() {
               time and keep your system prompt close.
             </p>
           </div>
-          <div className="hero-card">
-            <div className="hero-card-title">Model</div>
-            <select
-              value={selectedModel}
-              onChange={(event) => setSelectedModel(event.target.value)}
-              className="select"
-            >
-              {modelOptions.length === 0 && <option>Loading models...</option>}
-              {modelOptions.map((model) => (
-                <option key={model.id || model.name} value={model.name || model.id}>
-                  {model.label}
-                </option>
-              ))}
-            </select>
-            <div className="hero-card-footer">Streaming from {API_BASE}</div>
+          <div className="hero-side">
+            <div className="hero-card calendar-card">
+              <div className="hero-card-title">Calendar</div>
+              <div className="calendar-header">{calendarLabel}</div>
+              <div className="calendar-grid">
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                  <div key={day} className="calendar-weekday">
+                    {day}
+                  </div>
+                ))}
+                {calendarDays.map((date, index) => {
+                  const isToday =
+                    date &&
+                    date.getFullYear() === today.getFullYear() &&
+                    date.getMonth() === today.getMonth() &&
+                    date.getDate() === today.getDate();
+                  const isFuture =
+                    date &&
+                    new Date(date.getFullYear(), date.getMonth(), date.getDate()) >
+                      new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                  const className = [
+                    "calendar-cell",
+                    date ? "calendar-day" : "calendar-empty",
+                    isToday ? "calendar-today" : "",
+                    isFuture ? "calendar-future" : ""
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
+                  return (
+                    <button
+                      key={index}
+                      type="button"
+                      className={className}
+                      onClick={() => handleCalendarClick(date)}
+                      disabled={!date}
+                    >
+                      {date ? date.getDate() : ""}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="hero-card">
+              <div className="hero-card-title">Model</div>
+              <select
+                value={selectedModel}
+                onChange={(event) => setSelectedModel(event.target.value)}
+                className="select"
+              >
+                {modelOptions.length === 0 && <option>Loading models...</option>}
+                {modelOptions.map((model) => (
+                  <option key={model.id || model.name} value={model.name || model.id}>
+                    {model.label}
+                  </option>
+                ))}
+              </select>
+              <div className="hero-card-footer">Streaming from {API_BASE}</div>
+            </div>
           </div>
         </header>
 
