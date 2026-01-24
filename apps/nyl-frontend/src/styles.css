@@ -597,7 +597,8 @@ html[data-theme="dark"] .journal-label {
   color: rgba(245, 239, 231, 0.72);
 }
 
-html[data-theme="dark"] .journal-editor .ProseMirror {
+html[data-theme="dark"] .journal-editor .ProseMirror,
+html[data-theme="dark"] .journal-editor-content {
   background: rgba(27, 26, 24, 0.92);
   border-color: rgba(245, 239, 231, 0.12);
   color: var(--ink);
@@ -754,6 +755,10 @@ html[data-theme="dark"] .journal-pill {
   gap: 10px;
 }
 
+.journal-editor {
+  width: 100%;
+}
+
 .journal-editor .ProseMirror {
   border: 1px solid rgba(29, 27, 22, 0.12);
   border-radius: 16px;
@@ -766,7 +771,14 @@ html[data-theme="dark"] .journal-pill {
   min-height: 240px;
 }
 
-.journal-editor .ProseMirror:focus-visible {
+.journal-editor-content {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
+.journal-editor .ProseMirror:focus-visible,
+.journal-editor-content:focus-visible {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--ring);
 }

@@ -148,6 +148,17 @@ const makeId = () => {
   return `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
+const getFocusableElements = (container) => {
+  if (!container) {
+    return [];
+  }
+  return Array.from(
+    container.querySelectorAll(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]'
+    )
+  );
+};
+
 export default function App() {
   const today = new Date();
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -177,6 +188,10 @@ export default function App() {
   const saveTimerRef = useRef(null);
   const lastSavedRef = useRef({ title: "", body: DEFAULT_DOC });
   const isSettingContentRef = useRef(false);
+  const journalDrawerRef = useRef(null);
+  const journalTitleRef = useRef(null);
+  const lastFocusedRef = useRef(null);
+  const bodyOverflowRef = useRef("");
 
   const editor = useEditor({
     extensions: [StarterKit],
@@ -186,6 +201,14 @@ export default function App() {
         return;
       }
       setJournalBody(currentEditor.getJSON());
+    },
+    editorProps: {
+      attributes: {
+        class: "journal-editor-content",
+        role: "textbox",
+        "aria-multiline": "true",
+        "aria-labelledby": "journal-body-label"
+      }
     }
   });
 
@@ -255,6 +278,78 @@ export default function App() {
       window.localStorage.setItem("nyl-accent", accentColor);
     }
   }, [accentColor, theme]);
+
+  useEffect(() => {
+    if (!isJournalOpen || typeof document === "undefined") {
+      return;
+    }
+
+    bodyOverflowRef.current = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = bodyOverflowRef.current;
+    };
+  }, [isJournalOpen]);
+
+  useEffect(() => {
+    if (!isJournalOpen || typeof document === "undefined") {
+      return;
+    }
+
+    const drawer = journalDrawerRef.current;
+    if (!drawer) {
+      return;
+    }
+
+    lastFocusedRef.current = document.activeElement;
+    const focusables = getFocusableElements(drawer);
+    const focusTarget = journalTitleRef.current || focusables[0] || drawer;
+
+    requestAnimationFrame(() => {
+      focusTarget.focus();
+    });
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setIsJournalOpen(false);
+        return;
+      }
+
+      if (event.key !== "Tab") {
+        return;
+      }
+
+      const currentFocusables = getFocusableElements(drawer);
+      if (!currentFocusables.length) {
+        event.preventDefault();
+        drawer.focus();
+        return;
+      }
+
+      const first = currentFocusables[0];
+      const last = currentFocusables[currentFocusables.length - 1];
+      const active = document.activeElement;
+
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      if (lastFocusedRef.current?.focus) {
+        lastFocusedRef.current.focus();
+      }
+    };
+  }, [isJournalOpen]);
 
   useEffect(() => {
     const loadModels = async () => {
@@ -723,24 +818,32 @@ export default function App() {
             aria-label="Close journal"
             onClick={() => setIsJournalOpen(false)}
           />
-          <aside className="journal-drawer" role="dialog" aria-label="Journal entry">
-              <div className="journal-header">
-                <div>
-                  <p className="journal-eyebrow">Daily journal</p>
-                  <h2>{formatDisplayDate(selectedDate)}</h2>
-                  <p>Your entry saves automatically as you type.</p>
-                </div>
-                <div className="journal-status">
-                  <span className={`journal-pill journal-${journalStatus}`}>
-                    {journalStatusLabel}
-                  </span>
-                  <span className="journal-meta">{journalSavedLabel}</span>
-                </div>
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label="Close journal"
-                  onClick={() => setIsJournalOpen(false)}
+          <aside
+            className="journal-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="journal-title"
+            aria-describedby="journal-description"
+            tabIndex={-1}
+            ref={journalDrawerRef}
+          >
+            <div className="journal-header">
+              <div>
+                <p className="journal-eyebrow">Daily journal</p>
+                <h2 id="journal-title">{formatDisplayDate(selectedDate)}</h2>
+                <p id="journal-description">Your entry saves automatically as you type.</p>
+              </div>
+              <div className="journal-status">
+                <span className={`journal-pill journal-${journalStatus}`}>
+                  {journalStatusLabel}
+                </span>
+                <span className="journal-meta">{journalSavedLabel}</span>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Close journal"
+                onClick={() => setIsJournalOpen(false)}
               >
                 <span aria-hidden="true">✕</span>
               </button>
@@ -754,10 +857,13 @@ export default function App() {
                   placeholder="Give the day a headline"
                   value={journalTitle}
                   onChange={(event) => setJournalTitle(event.target.value)}
+                  ref={journalTitleRef}
                 />
               </label>
               <div className="journal-field">
-                <span className="journal-label">Body</span>
+                <span className="journal-label" id="journal-body-label">
+                  Body
+                </span>
                 <div className="journal-editor">
                   <EditorContent editor={editor} />
                 </div>
