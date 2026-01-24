@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: gpu-ready-labeler
+  namespace: gpu-operator-resources
+  labels:
+    app: gpu-ready-labeler
+spec:
+  selector:
+    matchLabels:
+      app: gpu-ready-labeler
+  template:
+    metadata:
+      labels:
+        app: gpu-ready-labeler
+    spec:
+      runtimeClassName: nvidia
+      serviceAccountName: gpu-ready-labeler
+      nodeSelector:
+        nvidia.com/gpu.present: "true"
+      restartPolicy: Always
+      volumes:
+        - name: ready-state
+          emptyDir: {}
+      initContainers:
+        - name: wait-for-gpu
+          image: nvidia/cuda:12.4.1-base-ubuntu22.04
+          imagePullPolicy: IfNotPresent
+          command: ["bash", "-c"]
+          args:
+            - |
+              until nvidia-smi -L >/dev/null 2>&1; do
+                echo "waiting for GPU to become ready";
+                sleep 5;
+              done
+              touch /ready/gpu-ready
+          volumeMounts:
+            - name: ready-state
+              mountPath: /ready
+      containers:
+        - name: label-node
+          image: bitnami/kubectl:1.32.0
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c"]
+          args:
+            - |
+              until [ -f /ready/gpu-ready ]; do
+                sleep 1;
+              done
+              kubectl label node "$NODE_NAME" gpu.nyl.io/ready=true --overwrite
+              sleep 3600
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: ready-state
+              mountPath: /ready

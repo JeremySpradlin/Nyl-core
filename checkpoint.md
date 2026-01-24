@@ -57,3 +57,19 @@
 - Streaming via ingress uses NGINX annotations in `Cluster/NylApi/ingress.yaml`.
 - If chat streaming fails, check `nyl-api` logs for `httpx.ReadTimeout` and redeploy API after updates.
 - Frontend chat history currently grows without a display cap; consider trimming rendered history or persisting to storage as usage increases.
+Last session summary:
+- Added SQLAlchemy async refactor for nyl-api with Alembic migrations, including new `database.py`, `models.py`, updated CRUD in `services/nyl-api/app/db.py`, and session-based deps in `services/nyl-api/app/main.py`.
+- Added Alembic config/migrations to the API image, and a migration Job manifest `Cluster/NylApi/migrate-job.yaml` (manual apply only). Initial migration drops `journal_entries` if it exists, then recreates it.
+- Frontend journal editor improvements: modal behavior, flex layout, and a formatting toolbar (bold/italic/headings/lists/quote/link/code). Added `@tiptap/extension-link`.
+- Added GPU readiness gating: new `Cluster/GpuReady/` DaemonSet labels nodes `gpu.nyl.io/ready=true` after `nvidia-smi` succeeds; GPU workloads now require that label.
+
+Pending:
+- After reboot, apply GPU-ready resources and redeploy GPU workloads:
+  - `microk8s kubectl apply -k Cluster/GpuReady`
+  - `microk8s kubectl apply -k Cluster/Ollama`
+  - `microk8s kubectl apply -k Cluster/JupyterLab`
+- Confirm node gets label `gpu.nyl.io/ready=true` and GPU pods schedule without `UnexpectedAdmissionError`.
+
+Notes:
+- Migration Job is manual (not in `Cluster/NylApi/kustomization.yaml`). Run with `microk8s kubectl apply -f Cluster/NylApi/migrate-job.yaml` after API image updates.
+- If Alembic migration fails due to existing table, initial migration now drops `journal_entries` before creating it.
