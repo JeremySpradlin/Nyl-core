@@ -2,22 +2,21 @@ import os
 
 from uuid import UUID
 
-from asyncpg.exceptions import UniqueViolationError
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from .database import get_session, shutdown_db, startup_db
 from .db import (
     create_journal_entry,
     delete_journal_entry,
     ensure_journal_entry,
-    get_db_pool,
     get_journal_entry,
     update_journal_entry,
     list_journal_entries,
-    shutdown_db,
-    startup_db,
 )
 from .ollama import (
     chat,
@@ -95,18 +94,18 @@ async def chat_completions(
 @app.post("/v1/journal/entries", response_model=JournalEntry)
 async def create_entry(
     request: JournalEntryCreate,
-    pool=Depends(get_db_pool),
+    session: AsyncSession = Depends(get_session),
 ):
     try:
         entry = await create_journal_entry(
-            pool=pool,
+            session=session,
             journal_date=request.journal_date,
             scope=request.scope,
             title=request.title,
             body=request.body,
             tags=request.tags,
         )
-    except UniqueViolationError as exc:
+    except IntegrityError as exc:
         raise HTTPException(
             status_code=409, detail="Journal entry already exists for this day"
         ) from exc
@@ -116,10 +115,10 @@ async def create_entry(
 @app.post("/v1/journal/entries/ensure", response_model=JournalEntry)
 async def ensure_entry(
     request: JournalEntryEnsure,
-    pool=Depends(get_db_pool),
+    session: AsyncSession = Depends(get_session),
 ):
     return await ensure_journal_entry(
-        pool=pool,
+        session=session,
         journal_date=request.journal_date,
         scope=request.scope,
         title=request.title,
@@ -132,17 +131,17 @@ async def ensure_entry(
 async def list_entries(
     scope: str = Query(..., pattern=SCOPE_PATTERN),
     limit: int = Query(50, ge=1, le=200),
-    pool=Depends(get_db_pool),
+    session: AsyncSession = Depends(get_session),
 ):
-    return await list_journal_entries(pool=pool, scope=scope, limit=limit)
+    return await list_journal_entries(session=session, scope=scope, limit=limit)
 
 
 @app.get("/v1/journal/entries/{entry_id}", response_model=JournalEntry)
 async def get_entry(
     entry_id: UUID,
-    pool=Depends(get_db_pool),
+    session: AsyncSession = Depends(get_session),
 ):
-    entry = await get_journal_entry(pool, entry_id)
+    entry = await get_journal_entry(session, entry_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Journal entry not found")
     return entry
@@ -152,7 +151,7 @@ async def get_entry(
 async def update_entry(
     entry_id: UUID,
     request: JournalEntryUpdate,
-    pool=Depends(get_db_pool),
+    session: AsyncSession = Depends(get_session),
 ):
     fields: dict[str, object] = {}
     if "title" in request.model_fields_set:
@@ -163,7 +162,7 @@ async def update_entry(
         fields["tags"] = request.tags
     if not fields:
         raise HTTPException(status_code=400, detail="No fields to update")
-    entry = await update_journal_entry(pool=pool, entry_id=entry_id, fields=fields)
+    entry = await update_journal_entry(session=session, entry_id=entry_id, fields=fields)
     if entry is None:
         raise HTTPException(status_code=404, detail="Journal entry not found")
     return entry
@@ -172,8 +171,8 @@ async def update_entry(
 @app.delete("/v1/journal/entries/{entry_id}", status_code=204)
 async def delete_entry(
     entry_id: UUID,
-    pool=Depends(get_db_pool),
+    session: AsyncSession = Depends(get_session),
 ):
-    deleted = await delete_journal_entry(pool, entry_id)
+    deleted = await delete_journal_entry(session, entry_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Journal entry not found")

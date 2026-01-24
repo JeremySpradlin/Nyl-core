@@ -1,0 +1,32 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nyl-api-migrate
+  labels:
+    app: nyl-api
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app: nyl-api
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: localhost:32000/nyl-api:latest
+          imagePullPolicy: Always
+          command: ["alembic"]
+          args: ["-c", "/app/alembic.ini", "upgrade", "head"]
+          env:
+            - name: POSTGRES_HOST
+              value: postgres
+            - name: POSTGRES_DB
+              value: nyl
+            - name: POSTGRES_USER
+              value: nyl
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
