@@ -847,6 +847,45 @@ html[data-theme="dark"] .journal-tool.active {
   height: 100%;
 }
 
+.journal-editor-content a {
+  color: var(--accent-dark);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.journal-editor-content ul,
+.journal-editor-content ol {
+  padding-left: 1.2rem;
+  margin: 0;
+}
+
+.journal-editor-content li + li {
+  margin-top: 6px;
+}
+
+.journal-editor-content pre {
+  background: rgba(29, 27, 22, 0.06);
+  border: 1px solid rgba(29, 27, 22, 0.12);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0;
+  overflow-x: auto;
+}
+
+.journal-editor-content pre code {
+  font-family: inherit;
+}
+
+.journal-editor-content blockquote {
+  margin: 0;
+  padding-left: 14px;
+  border-left: 3px solid rgba(208, 122, 74, 0.4);
+  color: var(--muted);
+}
+
 .journal-editor .ProseMirror:focus-visible,
 .journal-editor-content:focus-visible {
   border-color: var(--accent);

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DayPicker } from "react-day-picker";
 import { EditorContent, useEditor } from "@tiptap/react";
+import Link from "@tiptap/extension-link";
 import StarterKit from "@tiptap/starter-kit";
 import "react-day-picker/dist/style.css";
 
@@ -194,7 +195,14 @@ export default function App() {
   const bodyOverflowRef = useRef("");
 
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [
+      StarterKit,
+      Link.configure({
+        openOnClick: false,
+        autolink: true,
+        linkOnPaste: true
+      })
+    ],
     content: DEFAULT_DOC,
     onUpdate: ({ editor: currentEditor }) => {
       if (isSettingContentRef.current) {
@@ -211,6 +219,23 @@ export default function App() {
       }
     }
   });
+
+  const handleSetLink = () => {
+    if (!editor) {
+      return;
+    }
+    const currentHref = editor.getAttributes("link").href || "";
+    const nextHref = window.prompt("Enter a link URL", currentHref);
+    if (nextHref === null) {
+      return;
+    }
+    const trimmed = nextHref.trim();
+    if (!trimmed) {
+      editor.chain().focus().unsetLink().run();
+      return;
+    }
+    editor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
+  };
 
   const modelOptions = useMemo(() => {
     return models.map((model) => ({
@@ -909,11 +934,35 @@ export default function App() {
                   </button>
                   <button
                     type="button"
+                    className={`journal-tool${editor?.isActive("orderedList") ? " active" : ""}`}
+                    onClick={() => editor?.chain().focus().toggleOrderedList().run()}
+                    aria-pressed={editor?.isActive("orderedList") || false}
+                  >
+                    Ordered
+                  </button>
+                  <button
+                    type="button"
+                    className={`journal-tool${editor?.isActive("codeBlock") ? " active" : ""}`}
+                    onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
+                    aria-pressed={editor?.isActive("codeBlock") || false}
+                  >
+                    Code
+                  </button>
+                  <button
+                    type="button"
                     className={`journal-tool${editor?.isActive("blockquote") ? " active" : ""}`}
                     onClick={() => editor?.chain().focus().toggleBlockquote().run()}
                     aria-pressed={editor?.isActive("blockquote") || false}
                   >
                     Quote
+                  </button>
+                  <button
+                    type="button"
+                    className={`journal-tool${editor?.isActive("link") ? " active" : ""}`}
+                    onClick={handleSetLink}
+                    aria-pressed={editor?.isActive("link") || false}
+                  >
+                    {editor?.isActive("link") ? "Unlink" : "Link"}
                   </button>
                 </div>
                 <div className="journal-editor">
