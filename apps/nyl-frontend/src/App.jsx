@@ -7,6 +7,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 const initialSystemPrompt =
   "You are Nyl, a steady, helpful home assistant. Be concise, thoughtful, and practical.";
 const MAX_HISTORY_TURNS = 12;
+const DEFAULT_ACCENT = "#d07a4a";
 
 const formatModelLabel = (name) => {
   if (!name) return "Unknown model";
@@ -25,6 +26,40 @@ const formatModelLabel = (name) => {
 
   const label = labelParts.join(" ").replace(/B/, "B");
   return sizeToken ? label.replace(sizeToken, sizeToken.toUpperCase()) : label;
+};
+
+const hexToRgb = (hex) => {
+  const normalized = hex.replace("#", "");
+  if (normalized.length !== 6) {
+    return null;
+  }
+  const value = Number.parseInt(normalized, 16);
+  if (Number.isNaN(value)) {
+    return null;
+  }
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255
+  };
+};
+
+const darkenHex = (hex, amount) => {
+  const rgb = hexToRgb(hex);
+  if (!rgb) {
+    return hex;
+  }
+  const clamp = (value) => Math.max(0, Math.min(255, value));
+  const toHex = (value) => clamp(value).toString(16).padStart(2, "0");
+  return `#${toHex(rgb.r + amount)}${toHex(rgb.g + amount)}${toHex(rgb.b + amount)}`;
+};
+
+const buildRing = (hex, alpha) => {
+  const rgb = hexToRgb(hex);
+  if (!rgb) {
+    return `rgba(0, 0, 0, ${alpha})`;
+  }
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
 };
 
 const formatApiDate = (date) => {
@@ -90,6 +125,7 @@ export default function App() {
   const [streamingId, setStreamingId] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [theme, setTheme] = useState("light");
+  const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT);
   const scrollRef = useRef(null);
   const abortRef = useRef(null);
   const historyRef = useRef(history);
@@ -128,6 +164,30 @@ export default function App() {
       window.localStorage.setItem("nyl-theme", theme);
     }
   }, [theme]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const savedAccent = window.localStorage.getItem("nyl-accent");
+    if (savedAccent) {
+      setAccentColor(savedAccent);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    const root = document.documentElement;
+    const accentDark = darkenHex(accentColor, -32);
+    root.style.setProperty("--accent", accentColor);
+    root.style.setProperty("--accent-dark", accentDark);
+    root.style.setProperty("--ring", buildRing(accentColor, 0.35));
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("nyl-accent", accentColor);
+    }
+  }, [accentColor]);
 
   useEffect(() => {
     const loadModels = async () => {
@@ -514,6 +574,21 @@ export default function App() {
                     onChange={(event) => setTheme(event.target.checked ? "dark" : "light")}
                   />
                   <span className="slider" />
+                </label>
+              </div>
+              <div className="settings-card">
+                <div>
+                  <div className="settings-title">Accent color</div>
+                  <div className="settings-sub">Update the highlight color.</div>
+                </div>
+                <label className="color-picker">
+                  <input
+                    type="color"
+                    value={accentColor}
+                    onChange={(event) => setAccentColor(event.target.value)}
+                    aria-label="Accent color"
+                  />
+                  <span>{accentColor.toUpperCase()}</span>
                 </label>
               </div>
               <div className="settings-placeholder">New settings will appear here.</div>

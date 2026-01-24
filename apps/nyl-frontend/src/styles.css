@@ -466,6 +466,35 @@ body {
   font-size: 0.9rem;
 }
 
+.color-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.color-picker input[type="color"] {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.color-picker input[type="color"]::-webkit-color-swatch {
+  border-radius: 10px;
+  border: 1px solid rgba(29, 27, 22, 0.2);
+}
+
+.color-picker input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
 .switch {
   position: relative;
   width: 44px;
