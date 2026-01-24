@@ -62,6 +62,19 @@ const buildRing = (hex, alpha) => {
   return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
 };
 
+const mixHexColors = (foregroundHex, backgroundHex, ratio) => {
+  const foreground = hexToRgb(foregroundHex);
+  const background = hexToRgb(backgroundHex);
+  if (!foreground || !background) {
+    return foregroundHex;
+  }
+  const mixChannel = (front, back) => Math.round(front * ratio + back * (1 - ratio));
+  return `rgb(${mixChannel(foreground.r, background.r)}, ${mixChannel(
+    foreground.g,
+    background.g
+  )}, ${mixChannel(foreground.b, background.b)})`;
+};
+
 const formatApiDate = (date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -195,10 +208,19 @@ export default function App() {
     root.style.setProperty("--accent", accentColor);
     root.style.setProperty("--accent-dark", accentDark);
     root.style.setProperty("--ring", buildRing(accentColor, 0.35));
+    const supportsColorMix =
+      typeof CSS !== "undefined" && CSS.supports?.("color", "color-mix(in srgb, #000 50%, #fff)");
+    if (supportsColorMix) {
+      root.style.removeProperty("--glow");
+    } else {
+      const bgStart = getComputedStyle(root).getPropertyValue("--bg-start").trim();
+      const glowRatio = theme === "dark" ? 0.4 : 0.35;
+      root.style.setProperty("--glow", mixHexColors(accentColor, bgStart, glowRatio));
+    }
     if (typeof window !== "undefined") {
       window.localStorage.setItem("nyl-accent", accentColor);
     }
-  }, [accentColor]);
+  }, [accentColor, theme]);
 
   useEffect(() => {
     const loadModels = async () => {

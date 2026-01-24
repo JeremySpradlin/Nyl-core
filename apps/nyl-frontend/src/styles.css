@@ -10,6 +10,7 @@
   --accent-dark: #a15732;
   --shadow: rgba(29, 27, 22, 0.12);
   --ring: rgba(208, 122, 74, 0.35);
+  --glow: color-mix(in srgb, var(--accent) 35%, var(--bg-start));
 }
 
 html[data-theme="dark"] {
@@ -23,6 +24,7 @@ html[data-theme="dark"] {
   --accent-dark: #f1b07f;
   --shadow: rgba(0, 0, 0, 0.35);
   --ring: rgba(208, 138, 95, 0.35);
+  --glow: color-mix(in srgb, var(--accent) 40%, var(--bg-start));
 }
 
 * {
@@ -31,7 +33,7 @@ html[data-theme="dark"] {
 
 body {
   margin: 0;
-  background: radial-gradient(circle at top, var(--bg-end), var(--bg-start) 55%);
+  background: radial-gradient(circle at top, var(--glow), var(--bg-start) 55%);
   color: var(--ink);
   min-height: 100vh;
 }
