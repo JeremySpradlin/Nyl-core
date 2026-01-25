@@ -161,7 +161,7 @@ async def test_rag_placeholder_does_not_break():
         model="llama3.1:8b",
         messages=[{"role": "user", "content": "hi"}],
         stream=False,
-        rag={"enabled": True, "source": "trilium", "top_k": 3},
+        rag={"enabled": True, "source": "journal", "top_k": 3},
     )
 
     async with httpx.AsyncClient(transport=transport, base_url="http://ollama") as async_client:

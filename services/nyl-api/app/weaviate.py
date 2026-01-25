@@ -32,6 +32,32 @@ def get_weaviate_client() -> httpx.AsyncClient:
     return _weaviate_client
 
 
+async def query_journal_entries(
+    client: httpx.AsyncClient, vector: list[float], limit: int
+) -> list[dict[str, Any]]:
+    if not vector:
+        return []
+    vector_str = ", ".join(f"{value:.6f}" for value in vector)
+    query = (
+        "{"
+        " Get {"
+        f" {WEAVIATE_JOURNAL_CLASS}(limit: {limit}, nearVector: {{vector: [{vector_str}]}}) {{"
+        " source_id"
+        " journal_date"
+        " title"
+        " body_text"
+        " }"
+        " }"
+        "}"
+    )
+    response = await client.post("/v1/graphql", json={"query": query})
+    response.raise_for_status()
+    payload = response.json()
+    if payload.get("errors"):
+        raise RuntimeError(f"Weaviate query failed: {payload['errors']}")
+    return payload.get("data", {}).get("Get", {}).get(WEAVIATE_JOURNAL_CLASS, [])
+
+
 async def ensure_journal_schema(client: httpx.AsyncClient) -> None:
     global _schema_checked
     if _schema_checked:

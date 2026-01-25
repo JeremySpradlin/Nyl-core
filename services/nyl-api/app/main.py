@@ -21,6 +21,7 @@ from .db import (
 )
 from .rag_db import create_ingest_job, get_ingest_job
 from .rag_ingest import DEFAULT_EMBEDDING_MODEL, enqueue_ingest, reindex_journal_entries
+from .rag_chat import apply_rag_context
 from .ollama import (
     chat,
     get_ollama_client,
@@ -94,16 +95,17 @@ async def chat_completions(
 ):
     if not is_allowed_chat_model(request.model):
         raise HTTPException(status_code=400, detail="Model is not allowed for chat")
+    request_with_rag = await apply_rag_context(request, DEFAULT_EMBEDDING_MODEL)
     if request.stream:
         return StreamingResponse(
-            stream_chat(request, client),
+            stream_chat(request_with_rag, client),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
                 "X-Accel-Buffering": "no",
             },
         )
-    return await chat(request, client)
+    return await chat(request_with_rag, client)
 
 
 @app.post("/v1/journal/entries", response_model=JournalEntry)

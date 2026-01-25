@@ -43,6 +43,8 @@ spec:
               value: "true"
             - name: EMBEDDING_MODEL
               value: nomic-embed-text:latest
+            - name: RAG_RETRIEVAL_TIMEOUT
+              value: "4"
           readinessProbe:
             httpGet:
               path: /health

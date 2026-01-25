@@ -46,7 +46,12 @@ const makeId = () => {
   return `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
-export default function useChat({ apiBase, systemPrompt, selectedModel }) {
+export default function useChat({
+  apiBase,
+  systemPrompt,
+  selectedModel,
+  embeddingModel
+}) {
   const [history, setHistory] = useState([]);
   const [input, setInput] = useState("");
   const [status, setStatus] = useState("idle");
@@ -131,7 +136,12 @@ export default function useChat({ apiBase, systemPrompt, selectedModel }) {
         model: selectedModel,
         messages: buildMessages(systemPrompt, historyRef.current, userMessage),
         stream: true,
-        rag: { enabled: false, source: "trilium", top_k: 5 }
+        rag: {
+          enabled: true,
+          source: "journal",
+          top_k: 5,
+          embedding_model: embeddingModel || undefined
+        }
       };
 
       const response = await fetch(`${apiBase}/v1/chat/completions`, {

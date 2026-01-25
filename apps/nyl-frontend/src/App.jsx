@@ -151,7 +151,8 @@ export default function App() {
   const { history, input, setInput, status, streamingId, error, handleSubmit } = useChat({
     apiBase: API_BASE,
     systemPrompt,
-    selectedModel
+    selectedModel,
+    embeddingModel: selectedEmbeddingModel
   });
   const handleInputChange = (event) => setInput(event.target.value);
 

@@ -17,6 +17,7 @@ class RagConfig(BaseModel):
     enabled: bool = False
     source: str | None = None
     top_k: int | None = Field(default=None, ge=1)
+    embedding_model: str | None = None
 
 
 class ChatRequest(BaseModel):
