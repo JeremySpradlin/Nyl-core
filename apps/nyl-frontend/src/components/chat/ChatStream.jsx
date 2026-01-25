@@ -1,3 +1,4 @@
+import ChatMarkdown from "./ChatMarkdown";
 import ChatMessage from "./ChatMessage";
 
 export default function ChatStream({
@@ -18,7 +19,7 @@ export default function ChatStream({
       {history.map((entry) => (
         <div key={entry.id} className="chat-pair">
           <ChatMessage label="You" timestamp={entry.createdAt} variant="user">
-            <p>{entry.user}</p>
+            <ChatMarkdown content={entry.user} />
           </ChatMessage>
           {(entry.assistant || (status === "streaming" && entry.id === streamingId)) && (
             <ChatMessage
@@ -28,7 +29,7 @@ export default function ChatStream({
               isLive={status === "streaming" && entry.id === streamingId}
             >
               {entry.assistant ? (
-                <p>{entry.assistant}</p>
+                <ChatMarkdown content={entry.assistant} />
               ) : (
                 <div className="typing-indicator" aria-label="Nyl is typing">
                   <span />

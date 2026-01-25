@@ -95,7 +95,9 @@ export default function useChat({ apiBase, systemPrompt, selectedModel }) {
   };
 
   const handleSubmit = async (event) => {
-    event.preventDefault();
+    if (event?.preventDefault) {
+      event.preventDefault();
+    }
     if (!input.trim() || !selectedModel || status === "streaming") {
       return;
     }
