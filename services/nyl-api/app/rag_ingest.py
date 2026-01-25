@@ -190,7 +190,13 @@ async def ingest_journal_entry(
     }
     cleaned = _strip_none(properties)
     if existing:
-        await update_object(weaviate_client, object_id, cleaned, embedding)
+        try:
+            await update_object(weaviate_client, object_id, cleaned, embedding)
+        except RuntimeError as exc:
+            if "no object with id" in str(exc):
+                await upsert_object(weaviate_client, object_id, cleaned, embedding)
+            else:
+                raise
     else:
         await upsert_object(weaviate_client, object_id, cleaned, embedding)
 
