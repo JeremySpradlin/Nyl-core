@@ -113,3 +113,11 @@ async def update_object(
         raise RuntimeError(
             f"Weaviate update failed ({response.status_code}): {response.text}"
         )
+
+
+async def delete_object(client: httpx.AsyncClient, object_id: str) -> None:
+    response = await client.delete(f"/v1/objects/{WEAVIATE_JOURNAL_CLASS}/{object_id}")
+    if response.status_code not in (204, 404):
+        raise RuntimeError(
+            f"Weaviate delete failed ({response.status_code}): {response.text}"
+        )

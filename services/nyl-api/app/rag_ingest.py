@@ -13,6 +13,7 @@ from .models import JournalEntry
 from .ollama import embed_text, get_ollama_client
 from .rag_db import mark_job_completed, mark_job_failed, mark_job_running, update_job_progress, update_job_total
 from .weaviate import (
+    delete_object,
     ensure_journal_schema,
     get_object,
     get_weaviate_client,
@@ -24,6 +25,7 @@ LOGGER = logging.getLogger(__name__)
 
 RAG_INGEST_ON_SAVE = os.getenv("RAG_INGEST_ON_SAVE", "true").lower() == "true"
 DEFAULT_EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text:latest")
+EMBEDDING_CHUNK_SIZE = int(os.getenv("EMBEDDING_CHUNK_SIZE", "1500"))
 
 
 def _append_text(chunks: list[str], text: str) -> None:
@@ -94,6 +96,46 @@ def _strip_none(values: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in values.items() if value is not None}
 
 
+def _chunk_text(text: str, max_size: int) -> list[str]:
+    if not text:
+        return []
+    paragraphs = [chunk.strip() for chunk in text.split("\n\n") if chunk.strip()]
+    chunks: list[str] = []
+    buffer: list[str] = []
+    size = 0
+    for para in paragraphs:
+        if len(para) > max_size:
+            if buffer:
+                chunks.append("\n\n".join(buffer))
+                buffer = []
+                size = 0
+            for start in range(0, len(para), max_size):
+                chunks.append(para[start : start + max_size])
+            continue
+        next_size = size + len(para) + (2 if buffer else 0)
+        if next_size > max_size and buffer:
+            chunks.append("\n\n".join(buffer))
+            buffer = [para]
+            size = len(para)
+        else:
+            buffer.append(para)
+            size = next_size
+    if buffer:
+        chunks.append("\n\n".join(buffer))
+    return chunks
+
+
+def _average_vectors(vectors: list[list[float]]) -> list[float]:
+    if not vectors:
+        return []
+    length = len(vectors[0])
+    totals = [0.0] * length
+    for vector in vectors:
+        for idx in range(length):
+            totals[idx] += vector[idx]
+    return [value / len(vectors) for value in totals]
+
+
 async def ingest_journal_entry(
     entry: dict[str, Any], embedding_model: str | None = None
 ) -> None:
@@ -101,16 +143,18 @@ async def ingest_journal_entry(
     title = entry.get("title") or ""
     body_text = extract_journal_text(entry.get("body") or {})
     tags = entry.get("tags") or []
-    if not title and not body_text:
-        return
     content_hash = build_content_hash(title, body_text, tags)
     object_id = str(entry.get("id"))
 
     weaviate_client = get_weaviate_client()
     ollama_client = get_ollama_client()
-    await ensure_journal_schema(weaviate_client)
-
     existing = await get_object(weaviate_client, object_id)
+    if not title and not body_text:
+        if existing:
+            await delete_object(weaviate_client, object_id)
+        return
+
+    await ensure_journal_schema(weaviate_client)
     if existing:
         props = existing.get("properties") or {}
         if (
@@ -119,10 +163,18 @@ async def ingest_journal_entry(
         ):
             return
 
-    embedding = await embed_text(
-        f"{title}\n\n{body_text}".strip(), model=model, client=ollama_client
+    full_text = f"{title}\n\n{body_text}".strip()
+    chunks = _chunk_text(full_text, EMBEDDING_CHUNK_SIZE)
+    embeddings: list[list[float]] = []
+    for chunk in chunks:
+        embeddings.append(await embed_text(chunk, model=model, client=ollama_client))
+    embedding = _average_vectors(embeddings)
+    LOGGER.info(
+        "Weaviate embedding length=%s model=%s chunks=%s",
+        len(embedding),
+        model,
+        len(chunks),
     )
-    LOGGER.info("Weaviate embedding length=%s model=%s", len(embedding), model)
 
     properties = {
         "source_type": "journal",

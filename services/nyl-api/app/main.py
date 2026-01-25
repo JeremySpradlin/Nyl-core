@@ -26,6 +26,7 @@ from .ollama import (
     get_ollama_client,
     is_allowed_chat_model,
     list_models,
+    list_embedding_models,
     shutdown_ollama_client,
     startup_ollama_client,
     stream_chat,
@@ -77,6 +78,13 @@ async def health() -> dict[str, str]:
 @app.get("/v1/models")
 async def models(client: httpx.AsyncClient = Depends(get_ollama_client)) -> dict[str, object]:
     return await list_models(client)
+
+
+@app.get("/v1/models/embeddings")
+async def embedding_models(
+    client: httpx.AsyncClient = Depends(get_ollama_client),
+) -> dict[str, object]:
+    return await list_embedding_models(client)
 
 
 @app.post("/v1/chat/completions")

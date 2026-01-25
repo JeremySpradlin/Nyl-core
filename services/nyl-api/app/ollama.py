@@ -18,6 +18,7 @@ CHAT_MODEL_ALLOWLIST = [
     if model.strip()
 ]
 DEFAULT_CHAT_MODEL = os.getenv("DEFAULT_CHAT_MODEL", "").strip() or None
+DEFAULT_EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "").strip() or None
 
 
 def _ollama_timeout() -> httpx.Timeout:
@@ -75,12 +76,24 @@ def _choose_default_model(models: list[dict[str, Any]]) -> str | None:
     return _model_name(models[0]) if models else None
 
 
-async def list_models(client: httpx.AsyncClient = Depends(get_ollama_client)) -> dict[str, Any]:
+def _filter_embedding_models(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [model for model in models if _is_embedding_model(_model_name(model))]
+
+
+def _choose_default_embedding_model(models: list[dict[str, Any]]) -> str | None:
+    if DEFAULT_EMBEDDING_MODEL and DEFAULT_EMBEDDING_MODEL in {
+        _model_name(model) for model in models
+    }:
+        return DEFAULT_EMBEDDING_MODEL
+    return _model_name(models[0]) if models else None
+
+
+async def _list_all_models(client: httpx.AsyncClient) -> list[dict[str, Any]]:
     response = await client.get("/api/tags")
     if response.status_code != 200:
         raise HTTPException(status_code=502, detail="Ollama tags request failed")
     payload = response.json()
-    models = [
+    return [
         {
             "id": model.get("name"),
             "name": model.get("name"),
@@ -89,10 +102,25 @@ async def list_models(client: httpx.AsyncClient = Depends(get_ollama_client)) ->
         }
         for model in payload.get("models", [])
     ]
+
+
+async def list_models(client: httpx.AsyncClient = Depends(get_ollama_client)) -> dict[str, Any]:
+    models = await _list_all_models(client)
     chat_models = _filter_chat_models(models)
     return {
         "models": chat_models,
         "default_model": _choose_default_model(chat_models),
+    }
+
+
+async def list_embedding_models(
+    client: httpx.AsyncClient = Depends(get_ollama_client),
+) -> dict[str, Any]:
+    models = await _list_all_models(client)
+    embedding_models = _filter_embedding_models(models)
+    return {
+        "models": embedding_models,
+        "default_model": _choose_default_embedding_model(embedding_models),
     }
 
 
@@ -193,9 +221,11 @@ async def embed_text(
         json={"model": model, "prompt": text},
     )
     if response.status_code != 200:
-        raise RuntimeError("Ollama embeddings request failed")
+        raise RuntimeError(
+            f"Ollama embeddings request failed ({response.status_code}): {response.text}"
+        )
     data = response.json()
     embedding = data.get("embedding")
     if not embedding:
-        raise RuntimeError("Ollama embeddings response missing embedding")
+        raise RuntimeError(f"Ollama embeddings response missing embedding: {data}")
     return embedding

@@ -135,6 +135,12 @@ export default function App() {
   const [journalError, setJournalError] = useState("");
   const [journalSavedAt, setJournalSavedAt] = useState(null);
   const [isCalendarOpen, setIsCalendarOpen] = useState(true);
+  const [embeddingModels, setEmbeddingModels] = useState([]);
+  const [selectedEmbeddingModel, setSelectedEmbeddingModel] = useState("");
+  const [ragJob, setRagJob] = useState(null);
+  const [ragJobStatus, setRagJobStatus] = useState("idle");
+  const [ragJobError, setRagJobError] = useState("");
+  const ragPollRef = useRef(null);
   const saveTimerRef = useRef(null);
   const lastSavedRef = useRef({ title: "", body: DEFAULT_DOC });
   const isSettingContentRef = useRef(false);
@@ -257,6 +263,15 @@ export default function App() {
   }, [accentColor, theme]);
 
   useEffect(() => {
+    return () => {
+      if (ragPollRef.current) {
+        clearInterval(ragPollRef.current);
+        ragPollRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isJournalOpen || typeof document === "undefined") {
       return;
     }
@@ -357,6 +372,87 @@ export default function App() {
     loadModels();
   }, []);
 
+  useEffect(() => {
+    if (!isSettingsOpen) {
+      return;
+    }
+    const loadEmbeddingModels = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/v1/models/embeddings`);
+        if (!response.ok) {
+          throw new Error("Could not load embedding models.");
+        }
+        const data = await response.json();
+        const list = data.models || [];
+        setEmbeddingModels(list);
+        const defaultModel = data.default_model;
+        if (defaultModel && list.some((model) => model.name === defaultModel)) {
+          setSelectedEmbeddingModel(defaultModel);
+        } else if (list.length && !selectedEmbeddingModel) {
+          setSelectedEmbeddingModel(list[0].name);
+        }
+      } catch (err) {
+        setRagJobError(err.message || "Failed to load embedding models.");
+      }
+    };
+
+    loadEmbeddingModels();
+  }, [isSettingsOpen]);
+
+  const pollRagJob = async (jobId) => {
+    try {
+      const poll = await fetch(`${API_BASE}/v1/rag/jobs/${jobId}`);
+      if (!poll.ok) {
+        throw new Error("Failed to fetch job status.");
+      }
+      const data = await poll.json();
+      setRagJob(data);
+      setRagJobStatus(data.status);
+      if (data.status === "completed" || data.status === "failed") {
+        if (ragPollRef.current) {
+          clearInterval(ragPollRef.current);
+          ragPollRef.current = null;
+        }
+      }
+    } catch (err) {
+      setRagJobError(err.message || "Failed to poll job status.");
+      if (ragPollRef.current) {
+        clearInterval(ragPollRef.current);
+        ragPollRef.current = null;
+      }
+    }
+  };
+
+  const startRagPolling = (jobId) => {
+    if (ragPollRef.current) {
+      clearInterval(ragPollRef.current);
+    }
+    ragPollRef.current = setInterval(() => {
+      pollRagJob(jobId);
+    }, 3000);
+  };
+
+  useEffect(() => {
+    if (!isSettingsOpen) {
+      if (ragPollRef.current) {
+        clearInterval(ragPollRef.current);
+        ragPollRef.current = null;
+      }
+      return;
+    }
+    if (!ragJob || ragJob.status === "completed" || ragJob.status === "failed") {
+      return;
+    }
+    pollRagJob(ragJob.id);
+    startRagPolling(ragJob.id);
+    return () => {
+      if (ragPollRef.current) {
+        clearInterval(ragPollRef.current);
+        ragPollRef.current = null;
+      }
+    };
+  }, [isSettingsOpen, ragJob]);
+
   const handleCalendarClick = (date) => {
     if (!date) {
       return;
@@ -369,6 +465,43 @@ export default function App() {
       console.log(`Open journal for ${label}`);
     } else {
       console.log(`Future date ${label} not openable`);
+    }
+  };
+
+  const handleRagReindex = async () => {
+    if (!selectedEmbeddingModel) {
+      setRagJobError("Select an embedding model first.");
+      return;
+    }
+    const confirmed = window.confirm(
+      "Reindex all journal entries? This may take a while."
+    );
+    if (!confirmed) {
+      return;
+    }
+    setRagJobError("");
+    setRagJobStatus("running");
+    try {
+      const response = await fetch(
+        `${API_BASE}/v1/rag/reindex/journal?embedding_model=${encodeURIComponent(
+          selectedEmbeddingModel
+        )}`,
+        { method: "POST" }
+      );
+      if (!response.ok) {
+        throw new Error("Failed to start reindex job.");
+      }
+      const job = await response.json();
+      setRagJob(job);
+
+      setRagJobStatus(job.status);
+      pollRagJob(job.id);
+      if (isSettingsOpen) {
+        startRagPolling(job.id);
+      }
+    } catch (err) {
+      setRagJobStatus("idle");
+      setRagJobError(err.message || "Failed to start reindex job.");
     }
   };
 
@@ -815,6 +948,60 @@ export default function App() {
                 onChange={(event) => setSystemPrompt(event.target.value)}
                 rows={8}
               />
+            </div>
+
+            <div className="settings-section">
+              <div className="panel-header">
+                <h3>RAG</h3>
+                <p>Reindex journal entries for retrieval.</p>
+              </div>
+              <div className="rag-controls">
+                <label className="status-label" htmlFor="embedding-model">
+                  Embedding model
+                </label>
+                <select
+                  id="embedding-model"
+                  className="select"
+                  value={selectedEmbeddingModel}
+                  onChange={(event) => setSelectedEmbeddingModel(event.target.value)}
+                >
+                  {embeddingModels.length === 0 && (
+                    <option value="">Loading embedding models...</option>
+                  )}
+                  {embeddingModels.map((model) => (
+                    <option key={model.id || model.name} value={model.name}>
+                      {model.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="button"
+                  type="button"
+                  onClick={handleRagReindex}
+                  disabled={ragJobStatus === "running"}
+                >
+                  {ragJobStatus === "running" ? "Reindexing..." : "Reindex journal"}
+                </button>
+              </div>
+              {ragJob && (
+                <div className="rag-status">
+                  <div className="rag-progress">
+                    <div
+                      className="rag-progress-bar"
+                      style={{
+                        width:
+                          ragJob.total > 0
+                            ? `${Math.round((ragJob.processed / ragJob.total) * 100)}%`
+                            : "0%"
+                      }}
+                    />
+                  </div>
+                  <div className="rag-progress-meta">
+                    {ragJob.status} · {ragJob.processed}/{ragJob.total}
+                  </div>
+                </div>
+              )}
+              {ragJobError && <div className="error">{ragJobError}</div>}
             </div>
 
             <div className="settings-section">
