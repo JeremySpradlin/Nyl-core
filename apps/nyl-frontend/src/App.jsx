@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { DayPicker } from "react-day-picker";
 import { EditorContent, useEditor } from "@tiptap/react";
-import Link from "@tiptap/extension-link";
 import StarterKit from "@tiptap/starter-kit";
 import "react-day-picker/dist/style.css";
+import CalendarPanel from "./components/calendar/CalendarPanel";
+import ChatPanel from "./components/chat/ChatPanel";
+import useChat from "./hooks/useChat";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 
 const initialSystemPrompt =
   "You are Nyl, a steady, helpful home assistant. Be concise, thoughtful, and practical.";
-const MAX_HISTORY_TURNS = 12;
 const DEFAULT_ACCENT = "#d07a4a";
 const DEFAULT_DOC = { type: "doc", content: [] };
 const AUTOSAVE_DELAY_MS = 900;
@@ -105,50 +105,6 @@ const formatDisplayDate = (date) =>
     year: "numeric"
   });
 
-const parseSseEvents = (buffer) => {
-  const events = [];
-  const chunks = buffer.replace(/\r/g, "").split("\n\n");
-  const remaining = chunks.pop() || "";
-
-  for (const chunk of chunks) {
-    if (!chunk.trim()) {
-      continue;
-    }
-    const dataLines = chunk
-      .split("\n")
-      .filter((line) => line.startsWith("data:"))
-      .map((line) => line.replace(/^data:\s?/, ""));
-    if (dataLines.length) {
-      events.push(dataLines.join("\n"));
-    }
-  }
-
-  return { events, remaining };
-};
-
-const buildMessages = (systemPrompt, history, userMessage) => {
-  const messages = [];
-  const recentHistory = history.slice(-MAX_HISTORY_TURNS);
-  if (systemPrompt.trim()) {
-    messages.push({ role: "system", content: systemPrompt.trim() });
-  }
-  recentHistory.forEach((entry) => {
-    messages.push({ role: "user", content: entry.user });
-    if (entry.assistant) {
-      messages.push({ role: "assistant", content: entry.assistant });
-    }
-  });
-  messages.push({ role: "user", content: userMessage });
-  return messages;
-};
-
-const makeId = () => {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-};
-
 const getFocusableElements = (container) => {
   if (!container) {
     return [];
@@ -166,11 +122,7 @@ export default function App() {
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [systemPrompt, setSystemPrompt] = useState(initialSystemPrompt);
-  const [history, setHistory] = useState([]);
-  const [input, setInput] = useState("");
-  const [status, setStatus] = useState("idle");
-  const [error, setError] = useState("");
-  const [streamingId, setStreamingId] = useState(null);
+  const [modelError, setModelError] = useState("");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [theme, setTheme] = useState("light");
   const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT);
@@ -182,10 +134,6 @@ export default function App() {
   const [journalStatus, setJournalStatus] = useState("idle");
   const [journalError, setJournalError] = useState("");
   const [journalSavedAt, setJournalSavedAt] = useState(null);
-  const scrollRef = useRef(null);
-  const abortRef = useRef(null);
-  const historyRef = useRef(history);
-  const streamUpdateRef = useRef({ timer: null, text: "" });
   const saveTimerRef = useRef(null);
   const lastSavedRef = useRef({ title: "", body: DEFAULT_DOC });
   const isSettingContentRef = useRef(false);
@@ -193,14 +141,21 @@ export default function App() {
   const journalTitleRef = useRef(null);
   const lastFocusedRef = useRef(null);
   const bodyOverflowRef = useRef("");
+  const { history, input, setInput, status, streamingId, error, handleSubmit } = useChat({
+    apiBase: API_BASE,
+    systemPrompt,
+    selectedModel
+  });
+  const handleInputChange = (event) => setInput(event.target.value);
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
-      Link.configure({
-        openOnClick: false,
-        autolink: true,
-        linkOnPaste: true
+      StarterKit.configure({
+        link: {
+          openOnClick: false,
+          autolink: true,
+          linkOnPaste: true
+        }
       })
     ],
     content: DEFAULT_DOC,
@@ -243,10 +198,6 @@ export default function App() {
       label: formatModelLabel(model.name || model.id)
     }));
   }, [models]);
-
-  useEffect(() => {
-    historyRef.current = history;
-  }, [history]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -388,7 +339,7 @@ export default function App() {
         const defaultModel = data.default_model;
         const modelNames = new Set(list.map((model) => model.name || model.id));
         setModels(list);
-        setError("");
+        setModelError("");
         const hasSelected = selectedModel && modelNames.has(selectedModel);
         if (!hasSelected && list.length) {
           const nextModel =
@@ -398,157 +349,12 @@ export default function App() {
           setSelectedModel(nextModel);
         }
       } catch (err) {
-        setError(err.message || "Failed to load models.");
+        setModelError(err.message || "Failed to load models.");
       }
     };
 
     loadModels();
   }, []);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [history]);
-
-  useEffect(() => {
-        return () => {
-          if (abortRef.current) {
-            abortRef.current.abort();
-          }
-      if (streamUpdateRef.current.timer) {
-        clearTimeout(streamUpdateRef.current.timer);
-        streamUpdateRef.current.timer = null;
-      }
-    };
-  }, []);
-
-  const scheduleAssistantUpdate = (entryId, nextText) => {
-    streamUpdateRef.current.text = nextText;
-    if (streamUpdateRef.current.timer) {
-      return;
-    }
-    streamUpdateRef.current.timer = setTimeout(() => {
-      const text = streamUpdateRef.current.text;
-      streamUpdateRef.current.timer = null;
-      setHistory((prev) =>
-        prev.map((entry) => (entry.id === entryId ? { ...entry, assistant: text } : entry))
-      );
-    }, 40);
-  };
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    if (!input.trim() || !selectedModel || status === "streaming") {
-      return;
-    }
-
-    if (abortRef.current) {
-      abortRef.current.abort();
-    }
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    setStatus("streaming");
-    setError("");
-
-    const userMessage = input.trim();
-    setInput("");
-
-    const entryId = makeId();
-    const newEntry = {
-      id: entryId,
-      user: userMessage,
-      assistant: ""
-    };
-    setHistory((prev) => [...prev, newEntry]);
-    setStreamingId(newEntry.id);
-
-    let assistantText = "";
-    try {
-      const payload = {
-        model: selectedModel,
-        messages: buildMessages(systemPrompt, historyRef.current, userMessage),
-        stream: true,
-        rag: { enabled: false, source: "trilium", top_k: 5 }
-      };
-
-      const response = await fetch(`${API_BASE}/v1/chat/completions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal
-      });
-
-      if (!response.ok || !response.body) {
-        throw new Error("The chat stream could not be started.");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) {
-          break;
-        }
-
-        buffer += decoder.decode(value, { stream: true });
-        const { events, remaining } = parseSseEvents(buffer);
-        buffer = remaining;
-
-        for (const event of events) {
-          if (event === "[DONE]") {
-            continue;
-          }
-          let data;
-          try {
-            data = JSON.parse(event);
-          } catch (parseError) {
-            continue;
-          }
-          const delta = data?.choices?.[0]?.delta;
-          if (!delta?.content) {
-            continue;
-          }
-          assistantText += delta.content;
-          scheduleAssistantUpdate(newEntry.id, assistantText);
-        }
-      }
-
-      if (streamUpdateRef.current.timer) {
-        clearTimeout(streamUpdateRef.current.timer);
-        streamUpdateRef.current.timer = null;
-      }
-      setHistory((prev) =>
-        prev.map((entry) =>
-          entry.id === entryId ? { ...entry, assistant: assistantText } : entry
-        )
-      );
-      setStatus("idle");
-      setStreamingId(null);
-      abortRef.current = null;
-    } catch (err) {
-      if (streamUpdateRef.current.timer) {
-        clearTimeout(streamUpdateRef.current.timer);
-        streamUpdateRef.current.timer = null;
-      }
-      streamUpdateRef.current.text = "";
-      setHistory((prev) =>
-        prev.map((entry) => (entry.id === entryId ? { ...entry, assistant: "" } : entry))
-      );
-      if (err.name === "AbortError") {
-        setStatus("idle");
-        setStreamingId(null);
-        abortRef.current = null;
-        return;
-      }
-      setStatus("idle");
-      setError(err.message || "Something went wrong.");
-      setStreamingId(null);
-      abortRef.current = null;
-    }
-  };
 
   const handleCalendarClick = (date) => {
     if (!date) {
@@ -717,26 +523,12 @@ export default function App() {
             </p>
           </div>
           <div className="hero-side">
-            <div className="hero-card calendar-card">
-              <div className="calendar-card-header">
-                <div className="hero-card-title">Calendar</div>
-              </div>
-              <div className="calendar-body">
-                <DayPicker
-                  mode="single"
-                  selected={selectedDate}
-                  onDayClick={handleCalendarClick}
-                  modifiers={{ future: { after: today }, today: today }}
-                  modifiersClassNames={{
-                    future: "calendar-future",
-                    today: "calendar-today"
-                  }}
-                />
-              </div>
-              <div className="calendar-meta">
-                Selected: {formatApiDate(selectedDate)}
-              </div>
-            </div>
+            <CalendarPanel
+              selectedDate={selectedDate}
+              onSelectDate={handleCalendarClick}
+              today={today}
+              selectedLabel={formatApiDate(selectedDate)}
+            />
             <div className="hero-card">
               <div className="hero-card-title">Model</div>
               <select
@@ -757,60 +549,17 @@ export default function App() {
         </header>
 
         <main className="main">
-          <section className="panel chat">
-            <div className="panel-header">
-              <h2>Conversation</h2>
-              <p>{status === "streaming" ? "Streaming reply..." : "Ready for your next thought."}</p>
-            </div>
-            <div className="chat-stream" ref={scrollRef}>
-              {history.length === 0 && (
-                <div className="chat-empty">
-                  <p>Start with a plan, a question, or a memory you want to capture.</p>
-                </div>
-              )}
-              {history.map((entry) => (
-                <div key={entry.id} className="chat-pair">
-                  <div className="chat-bubble user">
-                    <span className="chat-label">You</span>
-                    <p>{entry.user}</p>
-                  </div>
-                  {(entry.assistant || (status === "streaming" && entry.id === streamingId)) && (
-                    <div
-                      className={`chat-bubble assistant${
-                        status === "streaming" && entry.id === streamingId ? " live" : ""
-                      }`}
-                    >
-                      <span className="chat-label">Nyl</span>
-                      {entry.assistant ? (
-                        <p>{entry.assistant}</p>
-                      ) : (
-                        <div className="typing-indicator" aria-label="Nyl is typing">
-                          <span />
-                          <span />
-                          <span />
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <form className="composer" onSubmit={handleSubmit}>
-            <input
-              className="input"
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder="Ask Nyl to plan, organize, or reflect..."
-              autoFocus
-            />
-              <button className="button" type="submit" disabled={status === "streaming"}>
-                Send
-              </button>
-            </form>
-
-            {error && <div className="error">{error}</div>}
-          </section>
+          <ChatPanel
+            title="Conversation"
+            subtitle={status === "streaming" ? "Streaming reply..." : "Ready for your next thought."}
+            history={history}
+            status={status}
+            streamingId={streamingId}
+            input={input}
+            onInputChange={handleInputChange}
+            onSubmit={handleSubmit}
+            error={error || modelError}
+          />
 
           <section className="panel">
             <div className="panel-header">

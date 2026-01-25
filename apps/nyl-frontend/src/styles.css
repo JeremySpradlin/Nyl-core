@@ -288,9 +288,13 @@ body {
 }
 
 .chat {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 16px;
+}
+
+.panel.chat {
+  height: clamp(360px, 60vh, 720px);
 }
 
 .status-panel {
@@ -318,12 +322,12 @@ body {
 }
 
 .chat-stream {
-  max-height: 420px;
   overflow-y: auto;
   padding-right: 8px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-height: 0;
 }
 
 .chat-empty {
@@ -346,6 +350,9 @@ body {
   position: relative;
   background: #fffdf9;
   box-shadow: 0 8px 22px rgba(29, 27, 22, 0.08);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .chat-bubble.user {
@@ -361,7 +368,10 @@ body {
 }
 
 .chat-label {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   font-family: "IBM Plex Mono", monospace;
   font-size: 11px;
   text-transform: uppercase;
@@ -370,9 +380,18 @@ body {
   margin-bottom: 8px;
 }
 
+.chat-timestamp {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: none;
+  opacity: 0.75;
+}
+
 .chat-bubble p {
   margin: 0;
   line-height: 1.5;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .typing-indicator {
@@ -1019,10 +1038,6 @@ html[data-theme="dark"] .journal-tool.active {
 
   .main {
     grid-template-columns: 1fr;
-  }
-
-  .chat-stream {
-    max-height: 360px;
   }
 
   .settings-overlay {
