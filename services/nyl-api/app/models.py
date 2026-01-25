@@ -35,3 +35,24 @@ class JournalEntry(Base):
         ),
         UniqueConstraint("scope", "journal_date", name="journal_entries_scope_date_key"),
     )
+
+
+class RagIngestJob(Base):
+    __tablename__ = "rag_ingest_jobs"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
+    source_type: Mapped[str] = mapped_column(Text, nullable=False, default="journal")
+    embedding_model: Mapped[str] = mapped_column(Text, nullable=False)
+    total: Mapped[int] = mapped_column(nullable=False, default=0)
+    processed: Mapped[int] = mapped_column(nullable=False, default=0)
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+    __table_args__ = (
+        Index("rag_ingest_jobs_status_idx", "status"),
+    )

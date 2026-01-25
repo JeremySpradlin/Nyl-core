@@ -181,3 +181,21 @@ async def chat(
             }
         ],
     }
+
+
+async def embed_text(
+    text: str,
+    model: str,
+    client: httpx.AsyncClient = Depends(get_ollama_client),
+) -> list[float]:
+    response = await client.post(
+        "/api/embeddings",
+        json={"model": model, "prompt": text},
+    )
+    if response.status_code != 200:
+        raise RuntimeError("Ollama embeddings request failed")
+    data = response.json()
+    embedding = data.get("embedding")
+    if not embedding:
+        raise RuntimeError("Ollama embeddings response missing embedding")
+    return embedding

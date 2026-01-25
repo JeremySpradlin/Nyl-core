@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 from uuid import UUID
@@ -18,6 +19,8 @@ from .db import (
     update_journal_entry,
     list_journal_entries,
 )
+from .rag_db import create_ingest_job, get_ingest_job
+from .rag_ingest import DEFAULT_EMBEDDING_MODEL, enqueue_ingest, reindex_journal_entries
 from .ollama import (
     chat,
     get_ollama_client,
@@ -33,8 +36,10 @@ from .schemas import (
     JournalEntryCreate,
     JournalEntryEnsure,
     JournalEntryUpdate,
+    RagIngestJob,
     SCOPE_PATTERN,
 )
+from .weaviate import shutdown_weaviate_client, startup_weaviate_client
 
 app = FastAPI(title="Nyl API")
 
@@ -53,12 +58,14 @@ if cors_origins:
 @app.on_event("startup")
 async def startup() -> None:
     await startup_ollama_client()
+    await startup_weaviate_client()
     await startup_db()
 
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
     await shutdown_ollama_client()
+    await shutdown_weaviate_client()
     await shutdown_db()
 
 
@@ -109,6 +116,7 @@ async def create_entry(
         raise HTTPException(
             status_code=409, detail="Journal entry already exists for this day"
         ) from exc
+    enqueue_ingest(entry)
     return entry
 
 
@@ -165,6 +173,7 @@ async def update_entry(
     entry = await update_journal_entry(session=session, entry_id=entry_id, fields=fields)
     if entry is None:
         raise HTTPException(status_code=404, detail="Journal entry not found")
+    enqueue_ingest(entry)
     return entry
 
 
@@ -176,3 +185,25 @@ async def delete_entry(
     deleted = await delete_journal_entry(session, entry_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Journal entry not found")
+
+
+@app.post("/v1/rag/reindex/journal", response_model=RagIngestJob)
+async def reindex_journal(
+    embedding_model: str | None = Query(default=None),
+    session: AsyncSession = Depends(get_session),
+):
+    model = embedding_model or DEFAULT_EMBEDDING_MODEL
+    job = await create_ingest_job(session=session, embedding_model=model)
+    asyncio.create_task(reindex_journal_entries(job["id"], model))
+    return job
+
+
+@app.get("/v1/rag/jobs/{job_id}", response_model=RagIngestJob)
+async def get_rag_job(
+    job_id: UUID,
+    session: AsyncSession = Depends(get_session),
+):
+    job = await get_ingest_job(session, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="RAG job not found")
+    return job

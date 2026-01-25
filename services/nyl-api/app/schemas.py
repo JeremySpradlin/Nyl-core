@@ -56,3 +56,16 @@ class JournalEntry(BaseModel):
     title: str | None = None
     body: dict[str, Any]
     tags: list[str] | None = None
+
+
+class RagIngestJob(BaseModel):
+    id: UUID
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    status: Literal["pending", "running", "completed", "failed"]
+    source_type: str
+    embedding_model: str
+    total: int
+    processed: int
+    error_message: str | None = None

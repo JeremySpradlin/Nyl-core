@@ -37,6 +37,12 @@ spec:
                 secretKeyRef:
                   name: postgres-secret
                   key: password
+            - name: WEAVIATE_URL
+              value: http://weaviate:8080
+            - name: RAG_INGEST_ON_SAVE
+              value: "true"
+            - name: EMBEDDING_MODEL
+              value: nomic-embed-text:latest
           readinessProbe:
             httpGet:
               path: /health
