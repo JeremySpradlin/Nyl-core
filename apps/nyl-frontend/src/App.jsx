@@ -134,6 +134,7 @@ export default function App() {
   const [journalStatus, setJournalStatus] = useState("idle");
   const [journalError, setJournalError] = useState("");
   const [journalSavedAt, setJournalSavedAt] = useState(null);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(true);
   const saveTimerRef = useRef(null);
   const lastSavedRef = useRef({ title: "", body: DEFAULT_DOC });
   const isSettingContentRef = useRef(false);
@@ -523,12 +524,6 @@ export default function App() {
             </p>
           </div>
           <div className="hero-side">
-            <CalendarPanel
-              selectedDate={selectedDate}
-              onSelectDate={handleCalendarClick}
-              today={today}
-              selectedLabel={formatApiDate(selectedDate)}
-            />
             <div className="hero-card">
               <div className="hero-card-title">Model</div>
               <select
@@ -549,6 +544,39 @@ export default function App() {
         </header>
 
         <main className="main">
+          <aside className="panel sidebar left">
+            <div className="sidebar-section">
+              <div className="panel-header">
+                <h2>Chats</h2>
+                <p>Jump back into a session or start fresh.</p>
+              </div>
+              <button className="button button-secondary" type="button">
+                New chat
+              </button>
+              <div className="sidebar-empty">No saved chats yet.</div>
+            </div>
+            <div className="sidebar-section">
+              <div className="panel-header">
+                <h3>Session status</h3>
+                <p>Context and model settings for this chat.</p>
+              </div>
+              <div className="status-panel">
+                <div>
+                  <div className="status-label">Active model</div>
+                  <div className="status-value">{selectedModel || "Loading..."}</div>
+                </div>
+                <div>
+                  <div className="status-label">System guidance</div>
+                  <div className="status-value">
+                    {systemPrompt.trim()
+                      ? `${systemPrompt.trim().slice(0, 120)}${systemPrompt.trim().length > 120 ? "…" : ""}`
+                      : "Not set yet."}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
+
           <ChatPanel
             title="Conversation"
             subtitle={status === "streaming" ? "Streaming reply..." : "Ready for your next thought."}
@@ -561,26 +589,50 @@ export default function App() {
             error={error || modelError}
           />
 
-          <section className="panel">
-            <div className="panel-header">
-              <h2>Session status</h2>
-              <p>Track the model and keep context tight for the conversation.</p>
-            </div>
-            <div className="status-panel">
-              <div>
-                <div className="status-label">Active model</div>
-                <div className="status-value">{selectedModel || "Loading..."}</div>
-              </div>
-              <div>
-                <div className="status-label">System guidance</div>
-                <div className="status-value">
-                  {systemPrompt.trim()
-                    ? `${systemPrompt.trim().slice(0, 120)}${systemPrompt.trim().length > 120 ? "…" : ""}`
-                    : "Not set yet."}
+          <aside className="panel sidebar right">
+            <div className="sidebar-section">
+              <div className="calendar-toggle">
+                <div className="panel-header">
+                  <h3>Calendar</h3>
+                  <p>Pick a day to open a journal entry.</p>
                 </div>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label={isCalendarOpen ? "Collapse calendar" : "Expand calendar"}
+                  onClick={() => setIsCalendarOpen((prev) => !prev)}
+                >
+                  <span aria-hidden="true">{isCalendarOpen ? "▾" : "▸"}</span>
+                </button>
+              </div>
+              {isCalendarOpen && (
+                <CalendarPanel
+                  selectedDate={selectedDate}
+                  onSelectDate={handleCalendarClick}
+                  today={today}
+                  selectedLabel={formatApiDate(selectedDate)}
+                />
+              )}
+            </div>
+            <div className="sidebar-section">
+              <div className="hero-card">
+                <div className="hero-card-title">Model</div>
+                <select
+                  value={selectedModel}
+                  onChange={(event) => setSelectedModel(event.target.value)}
+                  className="select"
+                >
+                  {modelOptions.length === 0 && <option>Loading models...</option>}
+                  {modelOptions.map((model) => (
+                    <option key={model.id || model.name} value={model.name || model.id}>
+                      {model.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="hero-card-footer">Streaming from {API_BASE}</div>
               </div>
             </div>
-          </section>
+          </aside>
         </main>
       </div>
 
