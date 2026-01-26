@@ -62,6 +62,13 @@ async def list_journal_entries(
     return [_entry_to_dict(entry) for entry in result.scalars().all()]
 
 
+async def list_journal_scopes(*, session: AsyncSession) -> list[str]:
+    result = await session.execute(
+        select(JournalEntry.scope).distinct().order_by(JournalEntry.scope.asc())
+    )
+    return [row[0] for row in result.all()]
+
+
 async def list_journal_entry_markers(
     *,
     session: AsyncSession,

@@ -231,11 +231,12 @@ body {
 .calendar-day-bars {
   display: flex;
   align-items: center;
-  gap: 3px;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .calendar-day-bar {
-  width: 10px;
+  width: 12px;
   height: 3px;
   border-radius: 999px;
 }
@@ -301,6 +302,60 @@ body {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.project-item {
+  border: 1px solid rgba(29, 27, 22, 0.08);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--ink);
+  text-align: left;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.project-item.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.journal-scope-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.journal-scope-select {
+  width: auto;
+  min-width: 180px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.journal-create {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px dashed rgba(29, 27, 22, 0.12);
+}
+
+.journal-create-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
 }
 
 .sidebar.left .panel-header h2 {

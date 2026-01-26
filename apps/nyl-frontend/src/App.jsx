@@ -93,6 +93,36 @@ const getMonthRange = (date) => {
   return { start, end };
 };
 
+const slugifyProject = (value) => {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) {
+    return "";
+  }
+  return trimmed
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "");
+};
+
+const formatScopeLabel = (scope) => {
+  if (scope === "daily") {
+    return "Daily journal";
+  }
+  if (!scope.startsWith("project:")) {
+    return scope;
+  }
+  const slug = scope.replace("project:", "");
+  if (!slug) {
+    return "Project journal";
+  }
+  return slug
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+};
+
+const isEmptyText = (value) => !value || !value.trim();
+
 const normalizeDoc = (body) => {
   if (!body || typeof body !== "object") {
     return DEFAULT_DOC;
@@ -134,6 +164,7 @@ export default function App() {
   const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT);
   const [selectedDate, setSelectedDate] = useState(todayStart);
   const [isJournalOpen, setIsJournalOpen] = useState(false);
+  const [journalScope, setJournalScope] = useState("daily");
   const [journalEntryId, setJournalEntryId] = useState(null);
   const [journalTitle, setJournalTitle] = useState("");
   const [journalBody, setJournalBody] = useState(DEFAULT_DOC);
@@ -145,6 +176,7 @@ export default function App() {
     new Date(todayStart.getFullYear(), todayStart.getMonth(), 1)
   );
   const [calendarMarkers, setCalendarMarkers] = useState({});
+  const [projectScopes, setProjectScopes] = useState([]);
   const [embeddingModels, setEmbeddingModels] = useState([]);
   const [selectedEmbeddingModel, setSelectedEmbeddingModel] = useState("");
   const [ragJob, setRagJob] = useState(null);
@@ -221,6 +253,25 @@ export default function App() {
     const nextMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
     setCalendarMonth(nextMonth);
   }, [selectedDate]);
+
+  const loadJournalScopes = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/v1/journal/scopes`);
+      if (!response.ok) {
+        throw new Error("Could not load journal scopes.");
+      }
+      const data = await response.json();
+      const scopes = Array.isArray(data) ? data : [];
+      const projects = scopes.filter((scope) => scope.startsWith("project:"));
+      setProjectScopes(projects);
+    } catch (err) {
+      setProjectScopes([]);
+    }
+  };
+
+  useEffect(() => {
+    loadJournalScopes();
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -423,7 +474,7 @@ export default function App() {
     const loadMarkers = async () => {
       try {
         const response = await fetch(
-          `${API_BASE}/v1/journal/entries/dates?scope=daily&start=${formatApiDate(
+          `${API_BASE}/v1/journal/entries/dates?start=${formatApiDate(
             start
           )}&end=${formatApiDate(end)}`
         );
@@ -446,6 +497,27 @@ export default function App() {
     };
     loadMarkers();
   }, [API_BASE, calendarMonth, isCalendarOpen]);
+
+  const handleScopeChange = (nextScope) => {
+    setJournalScope(nextScope);
+    setIsJournalOpen(true);
+  };
+
+  const handleNewProject = () => {
+    const name = window.prompt("Project name");
+    if (!name) {
+      return;
+    }
+    const slug = slugifyProject(name);
+    if (!slug) {
+      return;
+    }
+    const scope = `project:${slug}`;
+    if (!projectScopes.includes(scope)) {
+      setProjectScopes((prev) => [scope, ...prev]);
+    }
+    handleScopeChange(scope);
+  };
 
   const pollRagJob = async (jobId) => {
     try {
@@ -567,7 +639,7 @@ export default function App() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             journal_date: formatApiDate(selectedDate),
-            scope: "daily",
+            scope: journalScope,
             title: null,
             body: DEFAULT_DOC,
             tags: null
@@ -588,6 +660,7 @@ export default function App() {
         lastSavedRef.current = { title: nextTitle, body: nextBody };
         setJournalSavedAt(new Date());
         setJournalStatus("saved");
+        loadJournalScopes();
         if (editor) {
           isSettingContentRef.current = true;
           editor.commands.setContent(nextBody, false);
@@ -607,10 +680,13 @@ export default function App() {
     return () => {
       isActive = false;
     };
-  }, [isJournalOpen, selectedDate, editor]);
+  }, [isJournalOpen, selectedDate, journalScope, editor]);
 
   useEffect(() => {
     if (!isJournalOpen || !journalEntryId) {
+      if (journalStatus === "saving") {
+        setJournalStatus("idle");
+      }
       return;
     }
     const current = { title: journalTitle, body: journalBody };
@@ -639,6 +715,14 @@ export default function App() {
             body: journalBody
           })
         });
+        if (response.status === 204) {
+          lastSavedRef.current = current;
+          setJournalEntryId(null);
+          setJournalSavedAt(new Date());
+          setJournalStatus("saved");
+          loadJournalScopes();
+          return;
+        }
         if (!response.ok) {
           throw new Error("Failed to save journal entry.");
         }
@@ -651,6 +735,39 @@ export default function App() {
       }
     }, AUTOSAVE_DELAY_MS);
   }, [journalTitle, journalBody, journalEntryId, isJournalOpen]);
+
+  const handleCreateEntry = async () => {
+    if (!isJournalOpen) {
+      return;
+    }
+    setJournalStatus("saving");
+    setJournalError("");
+    try {
+      const response = await fetch(`${API_BASE}/v1/journal/entries/ensure`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          journal_date: formatApiDate(selectedDate),
+          scope: journalScope,
+          title: journalTitle || null,
+          body: journalBody,
+          tags: null
+        })
+      });
+      if (!response.ok) {
+        throw new Error("Failed to create journal entry.");
+      }
+      const entry = await response.json();
+      setJournalEntryId(entry.id);
+      lastSavedRef.current = { title: entry.title || "", body: normalizeDoc(entry.body) };
+      setJournalSavedAt(new Date());
+      setJournalStatus("saved");
+      loadJournalScopes();
+    } catch (err) {
+      setJournalStatus("error");
+      setJournalError(err.message || "Failed to create journal entry.");
+    }
+  };
 
   useEffect(() => {
     return () => {
@@ -735,6 +852,37 @@ export default function App() {
                 New chat
               </button>
               <div className="sidebar-empty">No saved chats yet.</div>
+            </div>
+            <div className="sidebar-section">
+              <div className="panel-header">
+                <h3>Projects</h3>
+                <p>Switch the active journal scope.</p>
+              </div>
+              <button className="button button-secondary" type="button" onClick={handleNewProject}>
+                New project
+              </button>
+              <div className="project-list">
+                <button
+                  type="button"
+                  className={`project-item${journalScope === "daily" ? " active" : ""}`}
+                  onClick={() => handleScopeChange("daily")}
+                >
+                  Daily journal
+                </button>
+                {projectScopes.length === 0 && (
+                  <div className="sidebar-empty">No project journals yet.</div>
+                )}
+                {projectScopes.map((scope) => (
+                  <button
+                    key={scope}
+                    type="button"
+                    className={`project-item${journalScope === scope ? " active" : ""}`}
+                    onClick={() => handleScopeChange(scope)}
+                  >
+                    {formatScopeLabel(scope)}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="sidebar-section">
               <div className="panel-header">
@@ -839,7 +987,21 @@ export default function App() {
           >
             <div className="journal-header">
               <div>
-                <p className="journal-eyebrow">Daily journal</p>
+                <div className="journal-scope-row">
+                  <p className="journal-eyebrow">Journal</p>
+                  <select
+                    className="select journal-scope-select"
+                    value={journalScope}
+                    onChange={(event) => handleScopeChange(event.target.value)}
+                  >
+                    <option value="daily">Daily journal</option>
+                    {projectScopes.map((scope) => (
+                      <option key={scope} value={scope}>
+                        {formatScopeLabel(scope)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <h2 id="journal-title">{formatDisplayDate(selectedDate)}</h2>
                 <p id="journal-description">Your entry saves automatically as you type.</p>
               </div>
@@ -859,6 +1021,16 @@ export default function App() {
               </button>
             </div>
             <div className="journal-shell">
+              {!journalEntryId && (
+                <div className="journal-create">
+                  <p className="journal-create-text">
+                    This entry is empty. Create it to start saving.
+                  </p>
+                  <button className="button" type="button" onClick={handleCreateEntry}>
+                    Create entry
+                  </button>
+                </div>
+              )}
               <label className="journal-field">
                 <span className="journal-label">Title</span>
                 <input

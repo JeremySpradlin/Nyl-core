@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 
 from .database import SessionLocal
+from .journal_text import extract_journal_text
 from .models import JournalEntry
 from .ollama import embed_text, get_ollama_client
 from .rag_db import mark_job_completed, mark_job_failed, mark_job_running, update_job_progress, update_job_total
@@ -26,49 +27,6 @@ LOGGER = logging.getLogger(__name__)
 RAG_INGEST_ON_SAVE = os.getenv("RAG_INGEST_ON_SAVE", "true").lower() == "true"
 DEFAULT_EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text:latest")
 EMBEDDING_CHUNK_SIZE = int(os.getenv("EMBEDDING_CHUNK_SIZE", "1500"))
-
-
-def _append_text(chunks: list[str], text: str) -> None:
-    if text:
-        chunks.append(text)
-
-
-def _maybe_newline(chunks: list[str]) -> None:
-    if not chunks:
-        return
-    if not chunks[-1].endswith("\n"):
-        chunks.append("\n")
-
-
-def _walk_tiptap(node: dict[str, Any], chunks: list[str]) -> None:
-    node_type = node.get("type")
-    if node_type == "text":
-        _append_text(chunks, node.get("text", ""))
-        return
-    if node_type == "hardBreak":
-        chunks.append("\n")
-        return
-
-    for child in node.get("content", []) or []:
-        _walk_tiptap(child, chunks)
-
-    if node_type in {
-        "paragraph",
-        "heading",
-        "blockquote",
-        "codeBlock",
-        "listItem",
-    }:
-        _maybe_newline(chunks)
-
-
-def extract_journal_text(body: dict[str, Any] | None) -> str:
-    if not body or not isinstance(body, dict):
-        return ""
-    chunks: list[str] = []
-    _walk_tiptap(body, chunks)
-    text = "".join(chunks)
-    return "\n".join(line.rstrip() for line in text.splitlines()).strip()
 
 
 def build_content_hash(title: str | None, body_text: str, tags: list[str] | None) -> str:

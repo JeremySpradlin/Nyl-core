@@ -5,7 +5,7 @@ from datetime import date
 from uuid import UUID
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import IntegrityError
@@ -20,7 +20,9 @@ from .db import (
     update_journal_entry,
     list_journal_entries,
     list_journal_entry_markers,
+    list_journal_scopes,
 )
+from .journal_text import extract_journal_text
 from .rag_db import create_ingest_job, get_ingest_job
 from .rag_ingest import DEFAULT_EMBEDDING_MODEL, enqueue_ingest, reindex_journal_entries
 from .rag_chat import apply_rag_context
@@ -157,6 +159,11 @@ async def list_entries(
     return await list_journal_entries(session=session, scope=scope, limit=limit)
 
 
+@app.get("/v1/journal/scopes", response_model=list[str])
+async def list_scopes(session: AsyncSession = Depends(get_session)):
+    return await list_journal_scopes(session=session)
+
+
 @app.get("/v1/journal/entries/dates", response_model=list[JournalEntryMarker])
 async def list_entry_markers(
     start: date = Query(...),
@@ -180,7 +187,7 @@ async def get_entry(
     return entry
 
 
-@app.patch("/v1/journal/entries/{entry_id}", response_model=JournalEntry)
+@app.patch("/v1/journal/entries/{entry_id}")
 async def update_entry(
     entry_id: UUID,
     request: JournalEntryUpdate,
@@ -198,6 +205,11 @@ async def update_entry(
     entry = await update_journal_entry(session=session, entry_id=entry_id, fields=fields)
     if entry is None:
         raise HTTPException(status_code=404, detail="Journal entry not found")
+    title = (entry.get("title") or "").strip()
+    body_text = extract_journal_text(entry.get("body") or {})
+    if not title and not body_text:
+        await delete_journal_entry(session, entry_id)
+        return Response(status_code=204)
     enqueue_ingest(entry)
     return entry
 
