@@ -182,11 +182,26 @@ body {
 }
 
 .calendar-card .rdp {
-  --rdp-cell-size: 34px;
+  --rdp-cell-size: clamp(32px, 3.2vw, 40px);
   --rdp-caption-font-size: 0.85rem;
   --rdp-accent-color: var(--accent);
   --rdp-background-color: var(--surface);
   margin: 0;
+  width: 100%;
+}
+
+.sidebar.right .calendar-card {
+  padding: 16px;
+}
+
+.calendar-card .rdp-months,
+.calendar-card .rdp-month,
+.calendar-card .rdp-table {
+  width: 100%;
+}
+
+.calendar-card .rdp-table {
+  table-layout: fixed;
 }
 
 .calendar-card .rdp-caption_label {
@@ -231,7 +246,7 @@ body {
 
 .main {
   display: grid;
-  grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.6fr) minmax(0, 0.85fr);
+  grid-template-columns: clamp(210px, 19vw, 270px) minmax(0, 1fr) clamp(340px, 30vw, 440px);
   gap: 24px;
   align-items: start;
 }
@@ -247,6 +262,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+.panel.sidebar.right {
+  padding: 16px;
 }
 
 .sidebar-section {

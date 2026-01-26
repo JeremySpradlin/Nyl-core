@@ -114,7 +114,7 @@ async def apply_rag_context(request: ChatRequest, default_embedding_model: str) 
         weaviate_client = get_weaviate_client()
         model = embedding_model or default_embedding_model
         embedding = await embed_text(query, model=model, client=ollama_client)
-        results = await query_journal_entries(weaviate_client, embedding, top_k)
+        results = await query_journal_entries(weaviate_client, embedding, query, top_k)
         return _build_context_block(results)
 
     start = time.perf_counter()

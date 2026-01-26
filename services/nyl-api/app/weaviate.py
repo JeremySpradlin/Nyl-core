@@ -32,20 +32,33 @@ def get_weaviate_client() -> httpx.AsyncClient:
     return _weaviate_client
 
 
+def _escape_graphql_string(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
 async def query_journal_entries(
-    client: httpx.AsyncClient, vector: list[float], limit: int
+    client: httpx.AsyncClient,
+    vector: list[float],
+    query_text: str,
+    limit: int,
+    alpha: float = 0.6,
 ) -> list[dict[str, Any]]:
     if not vector:
         return []
     vector_str = ", ".join(f"{value:.6f}" for value in vector)
+    safe_query = _escape_graphql_string(query_text)
+    hybrid_clause = (
+        f'hybrid: {{query: "{safe_query}", alpha: {alpha}, vector: [{vector_str}]}}'
+    )
     query = (
         "{"
         " Get {"
-        f" {WEAVIATE_JOURNAL_CLASS}(limit: {limit}, nearVector: {{vector: [{vector_str}]}}) {{"
+        f" {WEAVIATE_JOURNAL_CLASS}(limit: {limit}, {hybrid_clause}) {{"
         " source_id"
         " journal_date"
         " title"
         " body_text"
+        " _additional { score }"
         " }"
         " }"
         "}"
