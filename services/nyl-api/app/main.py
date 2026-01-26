@@ -1,5 +1,6 @@
 import asyncio
 import os
+from datetime import date
 
 from uuid import UUID
 
@@ -18,6 +19,7 @@ from .db import (
     get_journal_entry,
     update_journal_entry,
     list_journal_entries,
+    list_journal_entry_markers,
 )
 from .rag_db import create_ingest_job, get_ingest_job
 from .rag_ingest import DEFAULT_EMBEDDING_MODEL, enqueue_ingest, reindex_journal_entries
@@ -38,6 +40,7 @@ from .schemas import (
     JournalEntryCreate,
     JournalEntryEnsure,
     JournalEntryUpdate,
+    JournalEntryMarker,
     RagIngestJob,
     SCOPE_PATTERN,
 )
@@ -152,6 +155,18 @@ async def list_entries(
     session: AsyncSession = Depends(get_session),
 ):
     return await list_journal_entries(session=session, scope=scope, limit=limit)
+
+
+@app.get("/v1/journal/entries/dates", response_model=list[JournalEntryMarker])
+async def list_entry_markers(
+    start: date = Query(...),
+    end: date = Query(...),
+    scope: str | None = Query(default=None, pattern=SCOPE_PATTERN),
+    session: AsyncSession = Depends(get_session),
+):
+    return await list_journal_entry_markers(
+        session=session, start_date=start, end_date=end, scope=scope
+    )
 
 
 @app.get("/v1/journal/entries/{entry_id}", response_model=JournalEntry)

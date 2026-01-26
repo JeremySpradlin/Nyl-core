@@ -59,6 +59,12 @@ class JournalEntry(BaseModel):
     tags: list[str] | None = None
 
 
+class JournalEntryMarker(BaseModel):
+    journal_date: date
+    scope: Scope
+    count: int
+
+
 class RagIngestJob(BaseModel):
     id: UUID
     created_at: datetime

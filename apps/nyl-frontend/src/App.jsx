@@ -87,6 +87,12 @@ const formatApiDate = (date) => {
   return `${year}-${month}-${day}`;
 };
 
+const getMonthRange = (date) => {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  return { start, end };
+};
+
 const normalizeDoc = (body) => {
   if (!body || typeof body !== "object") {
     return DEFAULT_DOC;
@@ -135,6 +141,10 @@ export default function App() {
   const [journalError, setJournalError] = useState("");
   const [journalSavedAt, setJournalSavedAt] = useState(null);
   const [isCalendarOpen, setIsCalendarOpen] = useState(true);
+  const [calendarMonth, setCalendarMonth] = useState(
+    new Date(todayStart.getFullYear(), todayStart.getMonth(), 1)
+  );
+  const [calendarMarkers, setCalendarMarkers] = useState({});
   const [embeddingModels, setEmbeddingModels] = useState([]);
   const [selectedEmbeddingModel, setSelectedEmbeddingModel] = useState("");
   const [ragJob, setRagJob] = useState(null);
@@ -206,6 +216,11 @@ export default function App() {
       label: formatModelLabel(model.name || model.id)
     }));
   }, [models]);
+
+  useEffect(() => {
+    const nextMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+    setCalendarMonth(nextMonth);
+  }, [selectedDate]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -399,6 +414,38 @@ export default function App() {
 
     loadEmbeddingModels();
   }, [isSettingsOpen]);
+
+  useEffect(() => {
+    if (!isCalendarOpen) {
+      return;
+    }
+    const { start, end } = getMonthRange(calendarMonth);
+    const loadMarkers = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE}/v1/journal/entries/dates?scope=daily&start=${formatApiDate(
+            start
+          )}&end=${formatApiDate(end)}`
+        );
+        if (!response.ok) {
+          throw new Error("Could not load journal dates.");
+        }
+        const data = await response.json();
+        const nextMarkers = data.reduce((acc, item) => {
+          const key = item.journal_date;
+          if (!acc[key]) {
+            acc[key] = [];
+          }
+          acc[key].push({ scope: item.scope, count: item.count });
+          return acc;
+        }, {});
+        setCalendarMarkers(nextMarkers);
+      } catch (err) {
+        setCalendarMarkers({});
+      }
+    };
+    loadMarkers();
+  }, [API_BASE, calendarMonth, isCalendarOpen]);
 
   const pollRagJob = async (jobId) => {
     try {
@@ -741,6 +788,9 @@ export default function App() {
               </div>
               {isCalendarOpen && (
                 <CalendarPanel
+                  month={calendarMonth}
+                  onMonthChange={setCalendarMonth}
+                  markers={calendarMarkers}
                   selectedDate={selectedDate}
                   onSelectDate={handleCalendarClick}
                   today={today}

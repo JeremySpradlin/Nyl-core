@@ -4,7 +4,7 @@ from datetime import date
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -60,6 +60,32 @@ async def list_journal_entries(
         .limit(limit)
     )
     return [_entry_to_dict(entry) for entry in result.scalars().all()]
+
+
+async def list_journal_entry_markers(
+    *,
+    session: AsyncSession,
+    start_date: date,
+    end_date: date,
+    scope: str | None = None,
+) -> list[dict[str, Any]]:
+    query = (
+        select(
+            JournalEntry.journal_date,
+            JournalEntry.scope,
+            func.count(JournalEntry.id).label("count"),
+        )
+        .where(JournalEntry.journal_date.between(start_date, end_date))
+        .group_by(JournalEntry.journal_date, JournalEntry.scope)
+        .order_by(JournalEntry.journal_date.asc())
+    )
+    if scope:
+        query = query.where(JournalEntry.scope == scope)
+    result = await session.execute(query)
+    return [
+        {"journal_date": row.journal_date, "scope": row.scope, "count": row.count}
+        for row in result.all()
+    ]
 
 
 async def get_journal_entry(

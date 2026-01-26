@@ -217,6 +217,35 @@ body {
   border-radius: 10px;
 }
 
+.calendar-day-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.calendar-day-number {
+  line-height: 1;
+}
+
+.calendar-day-bars {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.calendar-day-bar {
+  width: 10px;
+  height: 3px;
+  border-radius: 999px;
+}
+
+.calendar-day-more {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9px;
+  color: var(--muted);
+}
+
 .calendar-card .rdp-day:hover {
   background: rgba(208, 122, 74, 0.12);
 }
