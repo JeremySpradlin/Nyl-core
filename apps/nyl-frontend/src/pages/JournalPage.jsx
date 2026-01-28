@@ -622,12 +622,16 @@ export default function JournalPage({ location, onNavigate }) {
                 }${entry.is_deleted ? " is-deleted" : ""}`}
                 onClick={() => handleSelectEntry(entry)}
               >
-                <div className="journal-entry-date">
-                  {formatDisplayDate(
-                    parseApiDateString(entry.journal_date) || new Date(entry.journal_date)
-                  )}
+                <div className="journal-entry-row">
+                  <span className="journal-entry-date">
+                    {formatDisplayDate(
+                      parseApiDateString(entry.journal_date) || new Date(entry.journal_date)
+                    )}
+                  </span>
+                  <span className="journal-entry-title">
+                    {entry.title || "Untitled entry"}
+                  </span>
                 </div>
-                <div className="journal-entry-title">{entry.title || "Untitled entry"}</div>
               </button>
             ))}
           </div>
@@ -669,96 +673,33 @@ export default function JournalPage({ location, onNavigate }) {
               No entry exists for this day yet. Create it to start writing.
             </div>
           )}
-          <div className="journal-field journal-tasks-section">
-            <div className="journal-tasks-header">
-              <span className="journal-label">Tasks</span>
-              <span className="journal-tasks-meta">
-                {openTaskCount} open / {sortedTasks.length} total
-              </span>
-            </div>
-            {!draftId && (
-              <div className="journal-tasks-empty">
-                Create the entry to add tasks.
-              </div>
-            )}
-            {draftId && !draftIsDeleted && (
-              <div className="journal-tasks">
-                {taskStatus === "loading" && (
-                  <div className="journal-tasks-empty">Loading tasks...</div>
-                )}
-                {taskStatus === "ready" && sortedTasks.length === 0 && (
-                  <div className="journal-tasks-empty">No tasks yet.</div>
-                )}
-                {sortedTasks.map((task) => (
-                  <label key={task.id} className="journal-task">
-                    <input
-                      type="checkbox"
-                      checked={task.done}
-                      onChange={(event) => handleToggleTask(task.id, event.target.checked)}
-                    />
-                    <span className={`journal-task-text${task.done ? " done" : ""}`}>
-                      {task.text}
-                    </span>
-                    <button
-                      type="button"
-                      className="icon-button journal-task-delete"
-                      aria-label="Delete task"
-                      onClick={() => handleDeleteTask(task.id)}
-                    >
-                      ✕
-                    </button>
-                  </label>
-                ))}
-                <div className="journal-task-input">
-                  <input
-                    className="journal-input"
-                    type="text"
-                    placeholder="Add a task"
-                    value={taskInput}
-                    onChange={(event) => setTaskInput(event.target.value)}
-                    disabled={!draftId || draftIsDeleted}
-                  />
+          <div className="journal-editor-grid">
+            <div className="journal-editor-main">
+              <label className="journal-field">
+                <span className="journal-label">Title</span>
+                <input
+                  className="journal-input"
+                  type="text"
+                  placeholder="Give the day a headline"
+                  value={draftTitle}
+                  onChange={(event) => setDraftTitle(event.target.value)}
+                  disabled={draftIsDeleted}
+                />
+              </label>
+              <div className="journal-field journal-body">
+                <span className="journal-label" id="journal-body-label">
+                  Body
+                </span>
+                <div className="journal-toolbar" role="toolbar" aria-label="Journal formatting">
                   <button
-                    className="button button-secondary"
                     type="button"
-                    onClick={handleCreateTask}
-                    disabled={!draftId || draftIsDeleted || !taskInput.trim()}
+                    className={`journal-tool${editor?.isActive("bold") ? " active" : ""}`}
+                    onClick={() => editor?.chain().focus().toggleBold().run()}
+                    disabled={!editor?.can().chain().focus().toggleBold().run() || draftIsDeleted}
+                    aria-pressed={editor?.isActive("bold") || false}
                   >
-                    Add
+                    B
                   </button>
-                </div>
-                {taskError && <div className="error">{taskError}</div>}
-              </div>
-            )}
-            {draftId && draftIsDeleted && (
-              <div className="journal-tasks-empty">Restore the entry to edit tasks.</div>
-            )}
-          </div>
-          <label className="journal-field">
-            <span className="journal-label">Title</span>
-            <input
-              className="journal-input"
-              type="text"
-              placeholder="Give the day a headline"
-              value={draftTitle}
-              onChange={(event) => setDraftTitle(event.target.value)}
-              disabled={draftIsDeleted}
-            />
-          </label>
-          <div className="journal-field journal-body">
-            <span className="journal-label" id="journal-body-label">
-              Body
-            </span>
-            <div className="journal-toolbar" role="toolbar" aria-label="Journal formatting">
-              <button
-                type="button"
-                className={`journal-tool${editor?.isActive("bold") ? " active" : ""}`}
-                onClick={() => editor?.chain().focus().toggleBold().run()}
-                disabled={!editor?.can().chain().focus().toggleBold().run() || draftIsDeleted}
-                aria-pressed={editor?.isActive("bold") || false}
-              >
-                B
-              </button>
               <button
                 type="button"
                 className={`journal-tool${editor?.isActive("italic") ? " active" : ""}`}
@@ -822,10 +763,79 @@ export default function JournalPage({ location, onNavigate }) {
               >
                 Quote
               </button>
+                </div>
+                <div className="journal-editor">
+                  <EditorContent editor={editor} />
+                </div>
+              </div>
             </div>
-            <div className="journal-editor">
-              <EditorContent editor={editor} />
-            </div>
+            <aside className="journal-editor-side">
+              <div className="journal-field journal-tasks-section">
+                <div className="journal-tasks-header">
+                  <span className="journal-label">Tasks</span>
+                  <span className="journal-tasks-meta">
+                    {openTaskCount} open / {sortedTasks.length} total
+                  </span>
+                </div>
+                {!draftId && (
+                  <div className="journal-tasks-empty">
+                    Create the entry to add tasks.
+                  </div>
+                )}
+                {draftId && !draftIsDeleted && (
+                  <div className="journal-tasks">
+                    {taskStatus === "loading" && (
+                      <div className="journal-tasks-empty">Loading tasks...</div>
+                    )}
+                    {taskStatus === "ready" && sortedTasks.length === 0 && (
+                      <div className="journal-tasks-empty">No tasks yet.</div>
+                    )}
+                    {sortedTasks.map((task) => (
+                      <label key={task.id} className="journal-task">
+                        <input
+                          type="checkbox"
+                          checked={task.done}
+                          onChange={(event) => handleToggleTask(task.id, event.target.checked)}
+                        />
+                        <span className={`journal-task-text${task.done ? " done" : ""}`}>
+                          {task.text}
+                        </span>
+                        <button
+                          type="button"
+                          className="icon-button journal-task-delete"
+                          aria-label="Delete task"
+                          onClick={() => handleDeleteTask(task.id)}
+                        >
+                          ✕
+                        </button>
+                      </label>
+                    ))}
+                    <div className="journal-task-input">
+                      <input
+                        className="journal-input"
+                        type="text"
+                        placeholder="Add a task"
+                        value={taskInput}
+                        onChange={(event) => setTaskInput(event.target.value)}
+                        disabled={!draftId || draftIsDeleted}
+                      />
+                      <button
+                        className="button button-secondary"
+                        type="button"
+                        onClick={handleCreateTask}
+                        disabled={!draftId || draftIsDeleted || !taskInput.trim()}
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {taskError && <div className="error">{taskError}</div>}
+                  </div>
+                )}
+                {draftId && draftIsDeleted && (
+                  <div className="journal-tasks-empty">Restore the entry to edit tasks.</div>
+                )}
+              </div>
+            </aside>
           </div>
           {!draftId && entriesFilter === "active" && (
             <div className="journal-create">
