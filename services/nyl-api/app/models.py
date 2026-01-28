@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Date, DateTime, Index, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -25,6 +25,8 @@ class JournalEntry(Base):
     title: Mapped[str | None] = mapped_column(Text)
     body: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     tags: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
+    is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (
         Index(
@@ -55,4 +57,23 @@ class RagIngestJob(Base):
 
     __table_args__ = (
         Index("rag_ingest_jobs_status_idx", "status"),
+    )
+
+
+class JournalTask(Base):
+    __tablename__ = "journal_tasks"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    entry_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("journal_entries.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    done: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    sort_order: Mapped[int] = mapped_column(nullable=False, default=0)
+
+    __table_args__ = (
+        Index("journal_tasks_entry_idx", "entry_id", "sort_order"),
     )

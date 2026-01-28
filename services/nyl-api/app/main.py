@@ -1,6 +1,6 @@
 import asyncio
 import os
-from datetime import date
+from datetime import date, date as dt_date
 
 from uuid import UUID
 
@@ -17,10 +17,17 @@ from .db import (
     delete_journal_entry,
     ensure_journal_entry,
     get_journal_entry,
+    get_journal_entry_by_date,
+    get_journal_task,
     update_journal_entry,
     list_journal_entries,
     list_journal_entry_markers,
     list_journal_scopes,
+    list_journal_tasks,
+    create_journal_task,
+    update_journal_task,
+    delete_journal_task,
+    restore_journal_entry,
 )
 from .journal_text import extract_journal_text
 from .rag_db import create_ingest_job, get_ingest_job
@@ -43,6 +50,9 @@ from .schemas import (
     JournalEntryEnsure,
     JournalEntryUpdate,
     JournalEntryMarker,
+    JournalTask,
+    JournalTaskCreate,
+    JournalTaskUpdate,
     RagIngestJob,
     SCOPE_PATTERN,
 )
@@ -154,9 +164,14 @@ async def ensure_entry(
 async def list_entries(
     scope: str = Query(..., pattern=SCOPE_PATTERN),
     limit: int = Query(50, ge=1, le=200),
+    status: str = Query("active"),
     session: AsyncSession = Depends(get_session),
 ):
-    return await list_journal_entries(session=session, scope=scope, limit=limit)
+    if status not in ("active", "deleted", "all"):
+        raise HTTPException(status_code=400, detail="Invalid status filter")
+    return await list_journal_entries(
+        session=session, scope=scope, limit=limit, status=status
+    )
 
 
 @app.get("/v1/journal/scopes", response_model=list[str])
@@ -176,18 +191,96 @@ async def list_entry_markers(
     )
 
 
-@app.get("/v1/journal/entries/{entry_id}", response_model=JournalEntry)
+@app.get("/v1/journal/entries/by-date", response_model=JournalEntry)
+async def get_entry_by_date(
+    scope: str = Query(..., pattern=SCOPE_PATTERN),
+    date_str: str = Query(..., alias="date"),
+    include_deleted: bool = Query(False),
+    session: AsyncSession = Depends(get_session),
+):
+    try:
+        journal_date = dt_date.fromisoformat(date_str)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid date format") from exc
+    entry = await get_journal_entry_by_date(
+        session=session,
+        scope=scope,
+        journal_date=journal_date,
+        include_deleted=include_deleted,
+    )
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Journal entry not found")
+    return entry
+
+
+@app.get("/v1/journal/entries/{entry_id:uuid}", response_model=JournalEntry)
 async def get_entry(
+    entry_id: UUID,
+    include_deleted: bool = Query(False),
+    session: AsyncSession = Depends(get_session),
+):
+    entry = await get_journal_entry(session, entry_id, include_deleted=include_deleted)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Journal entry not found")
+    return entry
+
+
+@app.get("/v1/journal/entries/{entry_id:uuid}/tasks", response_model=list[JournalTask])
+async def list_tasks(
     entry_id: UUID,
     session: AsyncSession = Depends(get_session),
 ):
     entry = await get_journal_entry(session, entry_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Journal entry not found")
-    return entry
+    return await list_journal_tasks(session=session, entry_id=entry_id)
 
 
-@app.patch("/v1/journal/entries/{entry_id}")
+@app.post("/v1/journal/entries/{entry_id:uuid}/tasks", response_model=JournalTask)
+async def create_task(
+    entry_id: UUID,
+    request: JournalTaskCreate,
+    session: AsyncSession = Depends(get_session),
+):
+    entry = await get_journal_entry(session, entry_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Journal entry not found")
+    tasks = await list_journal_tasks(session=session, entry_id=entry_id)
+    next_order = request.sort_order if request.sort_order is not None else len(tasks)
+    return await create_journal_task(
+        session=session, entry_id=entry_id, text=request.text, sort_order=next_order
+    )
+
+
+@app.patch("/v1/journal/tasks/{task_id}", response_model=JournalTask)
+async def update_task(
+    task_id: UUID,
+    request: JournalTaskUpdate,
+    session: AsyncSession = Depends(get_session),
+):
+    fields = request.model_dump(exclude_unset=True)
+    if not fields:
+        task = await get_journal_task(session=session, task_id=task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="Journal task not found")
+        return task
+    task = await update_journal_task(session=session, task_id=task_id, fields=fields)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Journal task not found")
+    return task
+
+
+@app.delete("/v1/journal/tasks/{task_id}", status_code=204)
+async def delete_task(
+    task_id: UUID,
+    session: AsyncSession = Depends(get_session),
+):
+    deleted = await delete_journal_task(session, task_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Journal task not found")
+
+
+@app.patch("/v1/journal/entries/{entry_id:uuid}")
 async def update_entry(
     entry_id: UUID,
     request: JournalEntryUpdate,
@@ -214,7 +307,7 @@ async def update_entry(
     return entry
 
 
-@app.delete("/v1/journal/entries/{entry_id}", status_code=204)
+@app.delete("/v1/journal/entries/{entry_id:uuid}", status_code=204)
 async def delete_entry(
     entry_id: UUID,
     session: AsyncSession = Depends(get_session),
@@ -222,6 +315,17 @@ async def delete_entry(
     deleted = await delete_journal_entry(session, entry_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Journal entry not found")
+
+
+@app.post("/v1/journal/entries/{entry_id:uuid}/restore", response_model=JournalEntry)
+async def restore_entry(
+    entry_id: UUID,
+    session: AsyncSession = Depends(get_session),
+):
+    entry = await restore_journal_entry(session, entry_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Journal entry not found")
+    return entry
 
 
 @app.post("/v1/rag/reindex/journal", response_model=RagIngestJob)

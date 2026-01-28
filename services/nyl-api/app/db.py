@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import JournalEntry
+from .models import JournalEntry, JournalTask
 
 
 def _entry_to_dict(entry: JournalEntry) -> dict[str, Any]:
@@ -20,6 +20,19 @@ def _entry_to_dict(entry: JournalEntry) -> dict[str, Any]:
         "title": entry.title,
         "body": entry.body,
         "tags": entry.tags,
+        "is_deleted": entry.is_deleted,
+        "deleted_at": entry.deleted_at,
+    }
+
+
+def _task_to_dict(task: JournalTask) -> dict[str, Any]:
+    return {
+        "id": task.id,
+        "entry_id": task.entry_id,
+        "created_at": task.created_at,
+        "text": task.text,
+        "done": task.done,
+        "sort_order": task.sort_order,
     }
 
 
@@ -51,11 +64,16 @@ async def create_journal_entry(
 
 
 async def list_journal_entries(
-    *, session: AsyncSession, scope: str, limit: int
+    *, session: AsyncSession, scope: str, limit: int, status: str = "active"
 ) -> list[dict[str, Any]]:
+    filters = [JournalEntry.scope == scope]
+    if status == "active":
+        filters.append(JournalEntry.is_deleted.is_(False))
+    elif status == "deleted":
+        filters.append(JournalEntry.is_deleted.is_(True))
     result = await session.execute(
         select(JournalEntry)
-        .where(JournalEntry.scope == scope)
+        .where(*filters)
         .order_by(JournalEntry.journal_date.desc(), JournalEntry.created_at.desc())
         .limit(limit)
     )
@@ -64,7 +82,10 @@ async def list_journal_entries(
 
 async def list_journal_scopes(*, session: AsyncSession) -> list[str]:
     result = await session.execute(
-        select(JournalEntry.scope).distinct().order_by(JournalEntry.scope.asc())
+        select(JournalEntry.scope)
+        .where(JournalEntry.is_deleted.is_(False))
+        .distinct()
+        .order_by(JournalEntry.scope.asc())
     )
     return [row[0] for row in result.all()]
 
@@ -82,7 +103,10 @@ async def list_journal_entry_markers(
             JournalEntry.scope,
             func.count(JournalEntry.id).label("count"),
         )
-        .where(JournalEntry.journal_date.between(start_date, end_date))
+        .where(
+            JournalEntry.journal_date.between(start_date, end_date),
+            JournalEntry.is_deleted.is_(False),
+        )
         .group_by(JournalEntry.journal_date, JournalEntry.scope)
         .order_by(JournalEntry.journal_date.asc())
     )
@@ -96,22 +120,24 @@ async def list_journal_entry_markers(
 
 
 async def get_journal_entry(
-    session: AsyncSession, entry_id: UUID
+    session: AsyncSession, entry_id: UUID, include_deleted: bool = False
 ) -> dict[str, Any] | None:
-    result = await session.execute(
-        select(JournalEntry).where(JournalEntry.id == entry_id)
-    )
+    filters = [JournalEntry.id == entry_id]
+    if not include_deleted:
+        filters.append(JournalEntry.is_deleted.is_(False))
+    result = await session.execute(select(JournalEntry).where(*filters))
     entry = result.scalar_one_or_none()
     return _entry_to_dict(entry) if entry else None
 
 
 async def get_journal_entry_by_date(
-    *, session: AsyncSession, scope: str, journal_date: date
+    *, session: AsyncSession, scope: str, journal_date: date, include_deleted: bool = False
 ) -> dict[str, Any] | None:
+    filters = [JournalEntry.scope == scope, JournalEntry.journal_date == journal_date]
+    if not include_deleted:
+        filters.append(JournalEntry.is_deleted.is_(False))
     result = await session.execute(
-        select(JournalEntry).where(
-            JournalEntry.scope == scope, JournalEntry.journal_date == journal_date
-        )
+        select(JournalEntry).where(*filters)
     )
     entry = result.scalar_one_or_none()
     return _entry_to_dict(entry) if entry else None
@@ -141,12 +167,23 @@ async def ensure_journal_entry(
         return _entry_to_dict(entry)
     except IntegrityError:
         await session.rollback()
-    existing = await get_journal_entry_by_date(
-        session=session, scope=scope, journal_date=journal_date
+    result = await session.execute(
+        select(JournalEntry).where(
+            JournalEntry.scope == scope, JournalEntry.journal_date == journal_date
+        )
     )
+    existing = result.scalar_one_or_none()
     if existing is None:
         raise RuntimeError("Failed to ensure journal entry")
-    return existing
+    if existing.is_deleted:
+        existing.is_deleted = False
+        existing.deleted_at = None
+        existing.title = title
+        existing.body = body
+        existing.tags = tags
+        await session.commit()
+        await session.refresh(existing)
+    return _entry_to_dict(existing)
 
 
 async def update_journal_entry(
@@ -154,9 +191,7 @@ async def update_journal_entry(
 ) -> dict[str, Any] | None:
     if not fields:
         return await get_journal_entry(session, entry_id)
-    result = await session.execute(
-        select(JournalEntry).where(JournalEntry.id == entry_id)
-    )
+    result = await session.execute(select(JournalEntry).where(JournalEntry.id == entry_id))
     entry = result.scalar_one_or_none()
     if entry is None:
         return None
@@ -168,12 +203,78 @@ async def update_journal_entry(
 
 
 async def delete_journal_entry(session: AsyncSession, entry_id: UUID) -> bool:
-    result = await session.execute(
-        select(JournalEntry).where(JournalEntry.id == entry_id)
-    )
+    result = await session.execute(select(JournalEntry).where(JournalEntry.id == entry_id))
     entry = result.scalar_one_or_none()
     if entry is None:
         return False
-    await session.delete(entry)
+    entry.is_deleted = True
+    entry.deleted_at = func.now()
     await session.commit()
     return True
+
+
+async def restore_journal_entry(session: AsyncSession, entry_id: UUID) -> dict[str, Any] | None:
+    result = await session.execute(select(JournalEntry).where(JournalEntry.id == entry_id))
+    entry = result.scalar_one_or_none()
+    if entry is None:
+        return None
+    entry.is_deleted = False
+    entry.deleted_at = None
+    await session.commit()
+    await session.refresh(entry)
+    return _entry_to_dict(entry)
+
+
+async def list_journal_tasks(
+    *, session: AsyncSession, entry_id: UUID
+) -> list[dict[str, Any]]:
+    result = await session.execute(
+        select(JournalTask)
+        .where(JournalTask.entry_id == entry_id)
+        .order_by(JournalTask.sort_order.asc(), JournalTask.created_at.asc())
+    )
+    return [_task_to_dict(task) for task in result.scalars().all()]
+
+
+async def create_journal_task(
+    *, session: AsyncSession, entry_id: UUID, text: str, sort_order: int
+) -> dict[str, Any]:
+    task = JournalTask(entry_id=entry_id, text=text, sort_order=sort_order)
+    session.add(task)
+    await session.commit()
+    await session.refresh(task)
+    return _task_to_dict(task)
+
+
+async def update_journal_task(
+    *, session: AsyncSession, task_id: UUID, fields: dict[str, Any]
+) -> dict[str, Any] | None:
+    if not fields:
+        return await get_journal_task(session=session, task_id=task_id)
+    result = await session.execute(select(JournalTask).where(JournalTask.id == task_id))
+    task = result.scalar_one_or_none()
+    if task is None:
+        return None
+    for key, value in fields.items():
+        setattr(task, key, value)
+    await session.commit()
+    await session.refresh(task)
+    return _task_to_dict(task)
+
+
+async def delete_journal_task(session: AsyncSession, task_id: UUID) -> bool:
+    result = await session.execute(select(JournalTask).where(JournalTask.id == task_id))
+    task = result.scalar_one_or_none()
+    if task is None:
+        return False
+    await session.delete(task)
+    await session.commit()
+    return True
+
+
+async def get_journal_task(
+    *, session: AsyncSession, task_id: UUID
+) -> dict[str, Any] | None:
+    result = await session.execute(select(JournalTask).where(JournalTask.id == task_id))
+    task = result.scalar_one_or_none()
+    return _task_to_dict(task) if task else None

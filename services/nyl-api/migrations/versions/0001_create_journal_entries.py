@@ -17,7 +17,6 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("DROP TABLE IF EXISTS journal_entries CASCADE")
     op.create_table(
         "journal_entries",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),

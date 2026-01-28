@@ -57,12 +57,34 @@ class JournalEntry(BaseModel):
     title: str | None = None
     body: dict[str, Any]
     tags: list[str] | None = None
+    is_deleted: bool = False
+    deleted_at: datetime | None = None
 
 
 class JournalEntryMarker(BaseModel):
     journal_date: date
     scope: Scope
     count: int
+
+
+class JournalTask(BaseModel):
+    id: UUID
+    entry_id: UUID
+    created_at: datetime
+    text: str
+    done: bool
+    sort_order: int
+
+
+class JournalTaskCreate(BaseModel):
+    text: str
+    sort_order: int | None = None
+
+
+class JournalTaskUpdate(BaseModel):
+    text: str | None = None
+    done: bool | None = None
+    sort_order: int | None = None
 
 
 class RagIngestJob(BaseModel):
