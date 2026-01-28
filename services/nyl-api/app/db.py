@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import JournalEntry, JournalTask
+from .models import ChatMessage, ChatSession, JournalEntry, JournalTask
 
 
 def _entry_to_dict(entry: JournalEntry) -> dict[str, Any]:
@@ -33,6 +33,29 @@ def _task_to_dict(task: JournalTask) -> dict[str, Any]:
         "text": task.text,
         "done": task.done,
         "sort_order": task.sort_order,
+    }
+
+
+def _session_to_dict(session: ChatSession) -> dict[str, Any]:
+    return {
+        "id": session.id,
+        "title": session.title,
+        "model": session.model,
+        "system_prompt": session.system_prompt,
+        "created_at": session.created_at,
+        "updated_at": session.updated_at,
+        "archived_at": session.archived_at,
+        "deleted_at": session.deleted_at,
+    }
+
+
+def _message_to_dict(message: ChatMessage) -> dict[str, Any]:
+    return {
+        "id": message.id,
+        "session_id": message.session_id,
+        "role": message.role,
+        "content": message.content,
+        "created_at": message.created_at,
     }
 
 
@@ -278,3 +301,174 @@ async def get_journal_task(
     result = await session.execute(select(JournalTask).where(JournalTask.id == task_id))
     task = result.scalar_one_or_none()
     return _task_to_dict(task) if task else None
+
+
+async def purge_deleted_chat_sessions(session: AsyncSession, *, older_than_days: int = 30) -> None:
+    cutoff = datetime.utcnow() - timedelta(days=older_than_days)
+    await session.execute(
+        delete(ChatMessage).where(
+            ChatMessage.session_id.in_(
+                select(ChatSession.id).where(ChatSession.deleted_at < cutoff)
+            )
+        )
+    )
+    await session.execute(
+        delete(ChatSession).where(ChatSession.deleted_at < cutoff)
+    )
+    await session.commit()
+
+
+async def create_chat_session(
+    *,
+    session: AsyncSession,
+    title: str | None,
+    model: str | None,
+    system_prompt: str | None,
+) -> dict[str, Any]:
+    chat_session = ChatSession(
+        id=uuid4(),
+        title=(title or "New chat").strip() or "New chat",
+        model=model,
+        system_prompt=system_prompt,
+    )
+    session.add(chat_session)
+    await session.commit()
+    await session.refresh(chat_session)
+    return _session_to_dict(chat_session)
+
+
+async def list_chat_sessions(
+    *,
+    session: AsyncSession,
+    status: str = "active",
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    if status == "active":
+        filters = [ChatSession.deleted_at.is_(None), ChatSession.archived_at.is_(None)]
+    elif status == "archived":
+        filters = [ChatSession.deleted_at.is_(None), ChatSession.archived_at.is_not(None)]
+    elif status == "deleted":
+        filters = [ChatSession.deleted_at.is_not(None)]
+    else:
+        filters = [ChatSession.deleted_at.is_(None)]
+    result = await session.execute(
+        select(ChatSession)
+        .where(*filters)
+        .order_by(ChatSession.updated_at.desc())
+        .limit(limit)
+    )
+    return [_session_to_dict(item) for item in result.scalars().all()]
+
+
+async def get_chat_session(
+    *, session: AsyncSession, session_id: UUID, include_deleted: bool = False
+) -> dict[str, Any] | None:
+    filters = [ChatSession.id == session_id]
+    if not include_deleted:
+        filters.append(ChatSession.deleted_at.is_(None))
+    result = await session.execute(select(ChatSession).where(*filters))
+    chat_session = result.scalar_one_or_none()
+    return _session_to_dict(chat_session) if chat_session else None
+
+
+async def list_chat_messages(
+    *, session: AsyncSession, session_id: UUID
+) -> list[dict[str, Any]]:
+    result = await session.execute(
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.created_at.asc())
+    )
+    return [_message_to_dict(message) for message in result.scalars().all()]
+
+
+async def add_chat_messages(
+    *,
+    session: AsyncSession,
+    session_id: UUID,
+    messages: list[dict[str, Any]],
+    model: str | None = None,
+    system_prompt: str | None = None,
+) -> list[dict[str, Any]]:
+    result = await session.execute(select(ChatSession).where(ChatSession.id == session_id))
+    chat_session = result.scalar_one_or_none()
+    if chat_session is None or chat_session.deleted_at is not None:
+        return []
+    created = []
+    for message in messages:
+        created.append(
+            ChatMessage(
+                session_id=session_id,
+                role=message["role"],
+                content=message["content"],
+            )
+        )
+    session.add_all(created)
+    if model is not None:
+        chat_session.model = model
+    if system_prompt is not None:
+        chat_session.system_prompt = system_prompt
+    if chat_session.title.strip().lower() == "new chat":
+        for message in messages:
+            if message["role"] == "user":
+                title = message["content"].strip()
+                if title:
+                    chat_session.title = title[:80]
+                break
+    await session.execute(
+        update(ChatSession)
+        .where(ChatSession.id == session_id)
+        .values(updated_at=func.now())
+    )
+    await session.commit()
+    return [_message_to_dict(item) for item in created]
+
+
+async def archive_chat_session(session: AsyncSession, session_id: UUID) -> dict[str, Any] | None:
+    result = await session.execute(select(ChatSession).where(ChatSession.id == session_id))
+    chat_session = result.scalar_one_or_none()
+    if chat_session is None:
+        return None
+    chat_session.archived_at = func.now()
+    await session.commit()
+    await session.refresh(chat_session)
+    return _session_to_dict(chat_session)
+
+
+async def unarchive_chat_session(
+    session: AsyncSession, session_id: UUID
+) -> dict[str, Any] | None:
+    result = await session.execute(select(ChatSession).where(ChatSession.id == session_id))
+    chat_session = result.scalar_one_or_none()
+    if chat_session is None:
+        return None
+    chat_session.archived_at = None
+    await session.commit()
+    await session.refresh(chat_session)
+    return _session_to_dict(chat_session)
+
+
+async def soft_delete_chat_session(
+    session: AsyncSession, session_id: UUID
+) -> dict[str, Any] | None:
+    result = await session.execute(select(ChatSession).where(ChatSession.id == session_id))
+    chat_session = result.scalar_one_or_none()
+    if chat_session is None:
+        return None
+    chat_session.deleted_at = func.now()
+    await session.commit()
+    await session.refresh(chat_session)
+    return _session_to_dict(chat_session)
+
+
+async def restore_chat_session(
+    session: AsyncSession, session_id: UUID
+) -> dict[str, Any] | None:
+    result = await session.execute(select(ChatSession).where(ChatSession.id == session_id))
+    chat_session = result.scalar_one_or_none()
+    if chat_session is None:
+        return None
+    chat_session.deleted_at = None
+    await session.commit()
+    await session.refresh(chat_session)
+    return _session_to_dict(chat_session)

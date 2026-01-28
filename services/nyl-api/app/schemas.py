@@ -13,6 +13,41 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class ChatSessionCreate(BaseModel):
+    title: str | None = None
+    model: str | None = None
+    system_prompt: str | None = None
+
+
+class ChatSession(BaseModel):
+    id: UUID
+    title: str
+    model: str | None = None
+    system_prompt: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    archived_at: datetime | None = None
+    deleted_at: datetime | None = None
+
+
+class ChatMessageRecord(BaseModel):
+    id: UUID
+    session_id: UUID
+    role: Literal["system", "user", "assistant"]
+    content: str
+    created_at: datetime
+
+
+class ChatMessageCreate(BaseModel):
+    role: Literal["system", "user", "assistant"]
+    content: str
+
+
+class ChatSessionDetail(BaseModel):
+    session: ChatSession
+    messages: list[ChatMessageRecord]
+
+
 class RagConfig(BaseModel):
     enabled: bool = False
     source: str | None = None

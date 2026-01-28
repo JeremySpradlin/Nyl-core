@@ -50,7 +50,9 @@ export default function useChat({
   apiBase,
   systemPrompt,
   selectedModel,
-  embeddingModel
+  embeddingModel,
+  sessionId,
+  onSessionTouched
 }) {
   const [history, setHistory] = useState([]);
   const [input, setInput] = useState("");
@@ -76,6 +78,15 @@ export default function useChat({
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+    setStatus("idle");
+    setStreamingId(null);
+    setError("");
+  }, [sessionId]);
 
   const scheduleAssistantUpdate = (entryId, nextText) => {
     streamUpdateRef.current.text = nextText;
@@ -106,6 +117,10 @@ export default function useChat({
     if (!input.trim() || !selectedModel || status === "streaming") {
       return;
     }
+    if (!sessionId) {
+      setError("Create a chat to start messaging.");
+      return;
+    }
 
     if (abortRef.current) {
       abortRef.current.abort();
@@ -129,6 +144,33 @@ export default function useChat({
     };
     setHistory((prev) => [...prev, newEntry]);
     setStreamingId(newEntry.id);
+
+    const persistMessages = async (messages) => {
+      try {
+        const params = new URLSearchParams();
+        if (selectedModel) {
+          params.set("model", selectedModel);
+        }
+        if (systemPrompt?.trim()) {
+          params.set("system_prompt", systemPrompt.trim());
+        }
+        const response = await fetch(
+          `${apiBase}/v1/chats/${sessionId}/messages${params.toString() ? `?${params}` : ""}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(messages)
+          }
+        );
+        if (response.ok) {
+          onSessionTouched?.(sessionId, messages[0]?.content || "");
+        }
+      } catch {
+        // Ignore persistence errors; chat UX shouldn't block.
+      }
+    };
+
+    persistMessages([{ role: "user", content: userMessage }]);
 
     let assistantText = "";
     try {
@@ -205,6 +247,7 @@ export default function useChat({
       setStatus("idle");
       setStreamingId(null);
       abortRef.current = null;
+      persistMessages([{ role: "assistant", content: assistantText }]);
     } catch (err) {
       if (streamUpdateRef.current.timer) {
         clearTimeout(streamUpdateRef.current.timer);
@@ -231,6 +274,7 @@ export default function useChat({
 
   return {
     history,
+    setHistory,
     input,
     setInput,
     status,

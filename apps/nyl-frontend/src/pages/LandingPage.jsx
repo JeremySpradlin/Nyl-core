@@ -55,6 +55,12 @@ export default function LandingPage({
   const [selectedModel, setSelectedModel] = useState("");
   const [systemPrompt, setSystemPrompt] = useState(initialSystemPrompt);
   const [modelError, setModelError] = useState("");
+  const [chatSessions, setChatSessions] = useState([]);
+  const [chatSessionsStatus, setChatSessionsStatus] = useState("idle");
+  const [chatSessionsError, setChatSessionsError] = useState("");
+  const [chatFilter, setChatFilter] = useState("active");
+  const [activeChatId, setActiveChatId] = useState(null);
+  const [activeChatTitle, setActiveChatTitle] = useState("Conversation");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(todayStart);
   const [isCalendarOpen, setIsCalendarOpen] = useState(true);
@@ -68,11 +74,32 @@ export default function LandingPage({
   const [ragJobStatus, setRagJobStatus] = useState("idle");
   const [ragJobError, setRagJobError] = useState("");
   const ragPollRef = useRef(null);
-  const { history, input, setInput, status, streamingId, error, handleSubmit } = useChat({
+  const autoChatRef = useRef(false);
+  const { history, setHistory, input, setInput, status, streamingId, error, handleSubmit } = useChat({
     apiBase: API_BASE,
     systemPrompt,
     selectedModel,
-    embeddingModel: selectedEmbeddingModel
+    embeddingModel: selectedEmbeddingModel,
+    sessionId: activeChatId,
+    onSessionTouched: (sessionId, userMessage) => {
+      setChatSessions((prev) => {
+        const next = prev.map((session) => {
+          if (session.id !== sessionId) {
+            return session;
+          }
+          const nextTitle =
+            session.title?.toLowerCase() === "new chat" && userMessage
+              ? userMessage.slice(0, 80)
+              : session.title;
+          return {
+            ...session,
+            title: nextTitle,
+            updated_at: new Date().toISOString()
+          };
+        });
+        return next.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+      });
+    }
   });
   const handleInputChange = (event) => setInput(event.target.value);
 
@@ -125,6 +152,177 @@ export default function LandingPage({
 
     loadModels();
   }, []);
+
+  const loadChatSessions = useCallback(async () => {
+    setChatSessionsStatus("loading");
+    setChatSessionsError("");
+    try {
+      const response = await fetch(`${API_BASE}/v1/chats?status=${chatFilter}`);
+      if (!response.ok) {
+        throw new Error("Could not load chats.");
+      }
+      const data = await response.json();
+      setChatSessions(Array.isArray(data) ? data : []);
+      setChatSessionsStatus("ready");
+    } catch (err) {
+      setChatSessions([]);
+      setChatSessionsStatus("error");
+      setChatSessionsError(err.message || "Failed to load chats.");
+    }
+  }, [chatFilter]);
+
+  useEffect(() => {
+    loadChatSessions();
+  }, [loadChatSessions]);
+
+  useEffect(() => {
+    setActiveChatId(null);
+    setActiveChatTitle("Conversation");
+  }, [chatFilter]);
+
+  useEffect(() => {
+    if (activeChatId || chatSessions.length === 0 || chatFilter !== "active") {
+      return;
+    }
+    setActiveChatId(chatSessions[0].id);
+  }, [activeChatId, chatSessions, chatFilter]);
+
+  useEffect(() => {
+    if (!activeChatId) {
+      setHistory([]);
+      setActiveChatTitle("Conversation");
+      return;
+    }
+    const loadChat = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/v1/chats/${activeChatId}`);
+        if (!response.ok) {
+          throw new Error("Could not load chat.");
+        }
+        const data = await response.json();
+        const session = data.session;
+        const messages = Array.isArray(data.messages) ? data.messages : [];
+        const nextHistory = [];
+        let current = null;
+        messages.forEach((message) => {
+          if (message.role === "user") {
+            current = {
+              id: message.id,
+              user: message.content,
+              assistant: "",
+              createdAt: new Date(message.created_at),
+              assistantAt: null
+            };
+            nextHistory.push(current);
+          } else if (message.role === "assistant") {
+            if (!current || current.assistant) {
+              current = {
+                id: message.id,
+                user: "",
+                assistant: "",
+                createdAt: new Date(message.created_at),
+                assistantAt: null
+              };
+              nextHistory.push(current);
+            }
+            current.assistant = message.content;
+            current.assistantAt = new Date(message.created_at);
+          }
+        });
+        setHistory(nextHistory);
+        if (session?.title) {
+          setActiveChatTitle(session.title);
+        }
+        if (session?.system_prompt) {
+          setSystemPrompt(session.system_prompt);
+        }
+        if (session?.model) {
+          setSelectedModel(session.model);
+        }
+      } catch (err) {
+        setHistory([]);
+      }
+    };
+    loadChat();
+  }, [activeChatId]);
+
+  const handleNewChat = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/v1/chats`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "New chat",
+          model: selectedModel || undefined,
+          system_prompt: systemPrompt || undefined
+        })
+      });
+      if (!response.ok) {
+        throw new Error("Failed to create chat.");
+      }
+      const data = await response.json();
+      setChatSessions((prev) => [data, ...prev]);
+      setActiveChatId(data.id);
+      setActiveChatTitle(data.title || "Conversation");
+      setHistory([]);
+      setChatFilter("active");
+    } catch (err) {
+      setChatSessionsError(err.message || "Failed to create chat.");
+    }
+  }, [selectedModel, systemPrompt, setHistory]);
+
+  const handleSelectChat = useCallback((chat) => {
+    setActiveChatId(chat.id);
+    setActiveChatTitle(chat.title || "Conversation");
+  }, []);
+
+  const handleArchiveChat = useCallback(async () => {
+    if (!activeChatId) {
+      return;
+    }
+    await fetch(`${API_BASE}/v1/chats/${activeChatId}/archive`, { method: "POST" });
+    loadChatSessions();
+    setActiveChatId(null);
+  }, [activeChatId, loadChatSessions]);
+
+  const handleRestoreChat = useCallback(async () => {
+    if (!activeChatId) {
+      return;
+    }
+    await fetch(`${API_BASE}/v1/chats/${activeChatId}/restore`, { method: "POST" });
+    loadChatSessions();
+  }, [activeChatId, loadChatSessions]);
+
+  const handleUnarchiveChat = useCallback(async () => {
+    if (!activeChatId) {
+      return;
+    }
+    await fetch(`${API_BASE}/v1/chats/${activeChatId}/unarchive`, { method: "POST" });
+    loadChatSessions();
+  }, [activeChatId, loadChatSessions]);
+
+  const handleDeleteChat = useCallback(async () => {
+    if (!activeChatId) {
+      return;
+    }
+    await fetch(`${API_BASE}/v1/chats/${activeChatId}`, { method: "DELETE" });
+    loadChatSessions();
+    setActiveChatId(null);
+  }, [activeChatId, loadChatSessions]);
+
+  useEffect(() => {
+    autoChatRef.current = false;
+  }, [chatFilter]);
+
+  useEffect(() => {
+    if (autoChatRef.current || chatFilter !== "active" || chatSessionsStatus !== "ready") {
+      return;
+    }
+    if (chatSessions.length === 0 && selectedModel) {
+      autoChatRef.current = true;
+      handleNewChat();
+    }
+  }, [chatFilter, chatSessionsStatus, chatSessions.length, selectedModel, handleNewChat]);
 
   useEffect(() => {
     if (!isSettingsOpen) {
@@ -338,37 +536,83 @@ export default function LandingPage({
                 <h2>Chats</h2>
                 <p>Jump back into a session or start fresh.</p>
               </div>
-              <button className="button button-secondary" type="button">
-                New chat
-              </button>
-              <div className="sidebar-empty">No saved chats yet.</div>
-            </div>
-            <div className="sidebar-section">
-              <div className="panel-header">
-                <h3>Session status</h3>
-                <p>Context and model settings for this chat.</p>
+              <div className="chat-sidebar-actions">
+                <button className="button button-secondary" type="button" onClick={handleNewChat}>
+                  New chat
+                </button>
+                {activeChatId && chatFilter === "active" && (
+                  <>
+                    <button className="button button-secondary" type="button" onClick={handleArchiveChat}>
+                      Archive
+                    </button>
+                    <button className="button button-secondary" type="button" onClick={handleDeleteChat}>
+                      Delete
+                    </button>
+                  </>
+                )}
+                {activeChatId && chatFilter === "archived" && (
+                  <button className="button button-secondary" type="button" onClick={handleUnarchiveChat}>
+                    Restore
+                  </button>
+                )}
+                {activeChatId && chatFilter === "deleted" && (
+                  <button className="button button-secondary" type="button" onClick={handleRestoreChat}>
+                    Restore
+                  </button>
+                )}
               </div>
-              <div className="status-panel">
-                <div>
-                  <div className="status-label">Active model</div>
-                  <div className="status-value">{selectedModel || "Loading..."}</div>
-                </div>
-                <div>
-                  <div className="status-label">System guidance</div>
-                  <div className="status-value">
-                    {systemPrompt.trim()
-                      ? `${systemPrompt.trim().slice(0, 120)}${
-                          systemPrompt.trim().length > 120 ? "…" : ""
-                        }`
-                      : "Not set yet."}
-                  </div>
-                </div>
+              <div className="chat-filter-row">
+                <button
+                  className={`filter-button${chatFilter === "active" ? " active" : ""}`}
+                  type="button"
+                  onClick={() => setChatFilter("active")}
+                >
+                  Active
+                </button>
+                <button
+                  className={`filter-button${chatFilter === "archived" ? " active" : ""}`}
+                  type="button"
+                  onClick={() => setChatFilter("archived")}
+                >
+                  Archived
+                </button>
+                <button
+                  className={`filter-button${chatFilter === "deleted" ? " active" : ""}`}
+                  type="button"
+                  onClick={() => setChatFilter("deleted")}
+                >
+                  Trash
+                </button>
+              </div>
+              {chatSessionsStatus === "loading" && (
+                <div className="sidebar-empty">Loading chats...</div>
+              )}
+              {chatSessionsStatus === "error" && (
+                <div className="error">{chatSessionsError || "Failed to load chats."}</div>
+              )}
+              {chatSessionsStatus === "ready" && chatSessions.length === 0 && (
+                <div className="sidebar-empty">No saved chats yet.</div>
+              )}
+              <div className="chat-session-list">
+                {chatSessions.map((chat) => (
+                  <button
+                    key={chat.id}
+                    type="button"
+                    className={`chat-session-item${activeChatId === chat.id ? " active" : ""}`}
+                    onClick={() => handleSelectChat(chat)}
+                  >
+                    <span className="chat-session-title">{chat.title || "New chat"}</span>
+                    <span className="chat-session-time">
+                      {new Date(chat.updated_at).toLocaleDateString()}
+                    </span>
+                  </button>
+                ))}
               </div>
             </div>
           </aside>
 
           <ChatPanel
-            title="Conversation"
+            title={activeChatTitle || "Conversation"}
             subtitle={status === "streaming" ? "Streaming reply..." : "Ready for your next thought."}
             history={history}
             status={status}
