@@ -219,13 +219,16 @@ export default function JournalPage({ location, onNavigate }) {
     const shouldHydrate =
       hydratedRef.current.id !== selectedEntry.id ||
       !isSameDoc(hydratedRef.current.body, nextBody);
+    const isSameEntry = hydratedRef.current.id === selectedEntry.id;
     setDraftId(selectedEntry.id);
     setDraftTitle(nextTitle);
     setDraftBody(nextBody);
     setDraftIsDeleted(nextDeleted);
     lastSavedRef.current = { title: nextTitle, body: nextBody };
     setDraftStatus("saved");
-    setDraftSavedAt(null);
+    if (!isSameEntry) {
+      setDraftSavedAt(null);
+    }
     setDraftError("");
     if (editor && shouldHydrate) {
       isSettingContentRef.current = true;
@@ -291,7 +294,6 @@ export default function JournalPage({ location, onNavigate }) {
         lastSavedRef.current = { title: updated.title || "", body: normalizeDoc(updated.body) };
         setDraftSavedAt(new Date());
         setDraftStatus("saved");
-        setSelectedEntry(updated);
         upsertEntry(updated);
       } catch (err) {
         setDraftStatus("error");
