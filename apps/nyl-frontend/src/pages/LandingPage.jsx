@@ -61,6 +61,7 @@ export default function LandingPage({
   const [chatFilter, setChatFilter] = useState("active");
   const [activeChatId, setActiveChatId] = useState(null);
   const [activeChatTitle, setActiveChatTitle] = useState("Conversation");
+  const [openChatMenuId, setOpenChatMenuId] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(todayStart);
   const [isCalendarOpen, setIsCalendarOpen] = useState(true);
@@ -178,6 +179,7 @@ export default function LandingPage({
   useEffect(() => {
     setActiveChatId(null);
     setActiveChatTitle("Conversation");
+    setOpenChatMenuId(null);
   }, [chatFilter]);
 
   useEffect(() => {
@@ -276,39 +278,74 @@ export default function LandingPage({
     setActiveChatTitle(chat.title || "Conversation");
   }, []);
 
-  const handleArchiveChat = useCallback(async () => {
-    if (!activeChatId) {
-      return;
-    }
-    await fetch(`${API_BASE}/v1/chats/${activeChatId}/archive`, { method: "POST" });
-    loadChatSessions();
-    setActiveChatId(null);
-  }, [activeChatId, loadChatSessions]);
+  const handleArchiveChatById = useCallback(
+    async (chatId) => {
+      if (!chatId) {
+        return;
+      }
+      await fetch(`${API_BASE}/v1/chats/${chatId}/archive`, { method: "POST" });
+      loadChatSessions();
+      if (activeChatId === chatId) {
+        setActiveChatId(null);
+      }
+    },
+    [activeChatId, loadChatSessions]
+  );
 
-  const handleRestoreChat = useCallback(async () => {
-    if (!activeChatId) {
-      return;
-    }
-    await fetch(`${API_BASE}/v1/chats/${activeChatId}/restore`, { method: "POST" });
-    loadChatSessions();
-  }, [activeChatId, loadChatSessions]);
+  const handleRestoreChatById = useCallback(
+    async (chatId) => {
+      if (!chatId) {
+        return;
+      }
+      await fetch(`${API_BASE}/v1/chats/${chatId}/restore`, { method: "POST" });
+      loadChatSessions();
+    },
+    [loadChatSessions]
+  );
 
-  const handleUnarchiveChat = useCallback(async () => {
-    if (!activeChatId) {
-      return;
-    }
-    await fetch(`${API_BASE}/v1/chats/${activeChatId}/unarchive`, { method: "POST" });
-    loadChatSessions();
-  }, [activeChatId, loadChatSessions]);
+  const handleUnarchiveChatById = useCallback(
+    async (chatId) => {
+      if (!chatId) {
+        return;
+      }
+      await fetch(`${API_BASE}/v1/chats/${chatId}/unarchive`, { method: "POST" });
+      loadChatSessions();
+      if (activeChatId === chatId) {
+        setActiveChatId(null);
+      }
+    },
+    [activeChatId, loadChatSessions]
+  );
 
-  const handleDeleteChat = useCallback(async () => {
-    if (!activeChatId) {
+  const handleDeleteChatById = useCallback(
+    async (chatId) => {
+      if (!chatId) {
+        return;
+      }
+      await fetch(`${API_BASE}/v1/chats/${chatId}`, { method: "DELETE" });
+      loadChatSessions();
+      if (activeChatId === chatId) {
+        setActiveChatId(null);
+      }
+    },
+    [activeChatId, loadChatSessions]
+  );
+
+  useEffect(() => {
+    if (!openChatMenuId) {
       return;
     }
-    await fetch(`${API_BASE}/v1/chats/${activeChatId}`, { method: "DELETE" });
-    loadChatSessions();
-    setActiveChatId(null);
-  }, [activeChatId, loadChatSessions]);
+    const handleCloseMenu = (event) => {
+      if (event.target.closest(".chat-session-actions")) {
+        return;
+      }
+      setOpenChatMenuId(null);
+    };
+    document.addEventListener("click", handleCloseMenu);
+    return () => {
+      document.removeEventListener("click", handleCloseMenu);
+    };
+  }, [openChatMenuId]);
 
   useEffect(() => {
     autoChatRef.current = false;
@@ -540,49 +577,31 @@ export default function LandingPage({
                 <button className="button button-secondary" type="button" onClick={handleNewChat}>
                   New chat
                 </button>
-                {activeChatId && chatFilter === "active" && (
-                  <>
-                    <button className="button button-secondary" type="button" onClick={handleArchiveChat}>
-                      Archive
-                    </button>
-                    <button className="button button-secondary" type="button" onClick={handleDeleteChat}>
-                      Delete
-                    </button>
-                  </>
-                )}
-                {activeChatId && chatFilter === "archived" && (
-                  <button className="button button-secondary" type="button" onClick={handleUnarchiveChat}>
-                    Restore
-                  </button>
-                )}
-                {activeChatId && chatFilter === "deleted" && (
-                  <button className="button button-secondary" type="button" onClick={handleRestoreChat}>
-                    Restore
-                  </button>
-                )}
               </div>
               <div className="chat-filter-row">
-                <button
-                  className={`filter-button${chatFilter === "active" ? " active" : ""}`}
-                  type="button"
-                  onClick={() => setChatFilter("active")}
-                >
-                  Active
-                </button>
-                <button
-                  className={`filter-button${chatFilter === "archived" ? " active" : ""}`}
-                  type="button"
-                  onClick={() => setChatFilter("archived")}
-                >
-                  Archived
-                </button>
-                <button
-                  className={`filter-button${chatFilter === "deleted" ? " active" : ""}`}
-                  type="button"
-                  onClick={() => setChatFilter("deleted")}
-                >
-                  Trash
-                </button>
+                <div className="chat-filter-segment">
+                  <button
+                    className={`filter-button${chatFilter === "active" ? " active" : ""}`}
+                    type="button"
+                    onClick={() => setChatFilter("active")}
+                  >
+                    Active
+                  </button>
+                  <button
+                    className={`filter-button${chatFilter === "archived" ? " active" : ""}`}
+                    type="button"
+                    onClick={() => setChatFilter("archived")}
+                  >
+                    Archived
+                  </button>
+                  <button
+                    className={`filter-button${chatFilter === "deleted" ? " active" : ""}`}
+                    type="button"
+                    onClick={() => setChatFilter("deleted")}
+                  >
+                    Trash
+                  </button>
+                </div>
               </div>
               {chatSessionsStatus === "loading" && (
                 <div className="sidebar-empty">Loading chats...</div>
@@ -595,17 +614,69 @@ export default function LandingPage({
               )}
               <div className="chat-session-list">
                 {chatSessions.map((chat) => (
-                  <button
+                  <div
                     key={chat.id}
-                    type="button"
-                    className={`chat-session-item${activeChatId === chat.id ? " active" : ""}`}
-                    onClick={() => handleSelectChat(chat)}
+                    className={`chat-session-row${activeChatId === chat.id ? " active" : ""}`}
                   >
-                    <span className="chat-session-title">{chat.title || "New chat"}</span>
-                    <span className="chat-session-time">
-                      {new Date(chat.updated_at).toLocaleDateString()}
-                    </span>
-                  </button>
+                    <button
+                      type="button"
+                      className="chat-session-item"
+                      onClick={() => handleSelectChat(chat)}
+                    >
+                      <span className="chat-session-title">{chat.title || "New chat"}</span>
+                      <span className="chat-session-time">
+                        {new Date(chat.updated_at).toLocaleDateString()}
+                      </span>
+                    </button>
+                    <div
+                      className="chat-session-actions"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        className="chat-session-menu-trigger"
+                        aria-haspopup="true"
+                        aria-expanded={openChatMenuId === chat.id}
+                        onClick={() =>
+                          setOpenChatMenuId((prev) => (prev === chat.id ? null : chat.id))
+                        }
+                      >
+                        ⋯
+                      </button>
+                      {openChatMenuId === chat.id && (
+                        <div className="chat-session-menu">
+                          {chatFilter === "active" && (
+                            <>
+                              <button type="button" onClick={() => handleArchiveChatById(chat.id)}>
+                                Archive
+                              </button>
+                              <button type="button" onClick={() => handleDeleteChatById(chat.id)}>
+                                Move to trash
+                              </button>
+                            </>
+                          )}
+                          {chatFilter === "archived" && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleUnarchiveChatById(chat.id)}
+                              >
+                                Restore
+                              </button>
+                              <button type="button" onClick={() => handleDeleteChatById(chat.id)}>
+                                Move to trash
+                              </button>
+                            </>
+                          )}
+                          {chatFilter === "deleted" && (
+                            <button type="button" onClick={() => handleRestoreChatById(chat.id)}>
+                              Restore
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
