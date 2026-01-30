@@ -4,6 +4,7 @@ from datetime import date, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -27,6 +28,9 @@ class JournalEntry(Base):
     tags: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(768))
+    embedding_model: Mapped[str | None] = mapped_column(Text)
+    content_hash: Mapped[str | None] = mapped_column(Text)
 
     __table_args__ = (
         Index(

@@ -71,7 +71,6 @@ from .schemas import (
     RagIngestJob,
     SCOPE_PATTERN,
 )
-from .weaviate import shutdown_weaviate_client, startup_weaviate_client
 
 app = FastAPI(title="Nyl API")
 
@@ -90,14 +89,12 @@ if cors_origins:
 @app.on_event("startup")
 async def startup() -> None:
     await startup_ollama_client()
-    await startup_weaviate_client()
     await startup_db()
 
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
     await shutdown_ollama_client()
-    await shutdown_weaviate_client()
     await shutdown_db()
 
 

@@ -2,25 +2,21 @@ import asyncio
 import hashlib
 import logging
 import os
-from datetime import date, datetime, time, timezone
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
 
 from .database import SessionLocal
+from .db import (
+    clear_journal_entry_embedding,
+    get_journal_entry_embedding_info,
+    update_journal_entry_embedding,
+)
 from .journal_text import extract_journal_text
 from .models import JournalEntry
 from .ollama import embed_text, get_ollama_client
 from .rag_db import mark_job_completed, mark_job_failed, mark_job_running, update_job_progress, update_job_total
-from .weaviate import (
-    delete_object,
-    ensure_journal_schema,
-    get_object,
-    get_weaviate_client,
-    upsert_object,
-    update_object,
-)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -38,20 +34,6 @@ def build_content_hash(title: str | None, body_text: str, tags: list[str] | None
         ]
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
-def _to_rfc3339(value: date | datetime | None) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        if value.tzinfo is None:
-            value = value.replace(tzinfo=timezone.utc)
-        return value.isoformat()
-    return datetime.combine(value, time.min, tzinfo=timezone.utc).isoformat()
-
-
-def _strip_none(values: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in values.items() if value is not None}
 
 
 def _chunk_text(text: str, max_size: int) -> list[str]:
@@ -102,61 +84,46 @@ async def ingest_journal_entry(
     body_text = extract_journal_text(entry.get("body") or {})
     tags = entry.get("tags") or []
     content_hash = build_content_hash(title, body_text, tags)
-    object_id = str(entry.get("id"))
+    entry_id = entry.get("id")
 
-    weaviate_client = get_weaviate_client()
-    ollama_client = get_ollama_client()
-    existing = await get_object(weaviate_client, object_id)
-    if not title and not body_text:
-        if existing:
-            await delete_object(weaviate_client, object_id)
-        return
+    async with SessionLocal() as session:
+        # Check if we need to update
+        existing = await get_journal_entry_embedding_info(session, entry_id)
 
-    await ensure_journal_schema(weaviate_client)
-    if existing:
-        props = existing.get("properties") or {}
-        if (
-            props.get("content_hash") == content_hash
-            and props.get("embedding_model") == model
-        ):
+        if not title and not body_text:
+            # Clear embedding if content is empty
+            if existing and existing.get("content_hash"):
+                await clear_journal_entry_embedding(session, entry_id)
             return
 
-    full_text = f"{title}\n\n{body_text}".strip()
-    chunks = _chunk_text(full_text, EMBEDDING_CHUNK_SIZE)
-    embeddings: list[list[float]] = []
-    for chunk in chunks:
-        embeddings.append(await embed_text(chunk, model=model, client=ollama_client))
-    embedding = _average_vectors(embeddings)
-    LOGGER.info(
-        "Weaviate embedding length=%s model=%s chunks=%s",
-        len(embedding),
-        model,
-        len(chunks),
-    )
+        # Skip if unchanged
+        if existing:
+            if (
+                existing.get("content_hash") == content_hash
+                and existing.get("embedding_model") == model
+            ):
+                return
 
-    properties = {
-        "source_type": "journal",
-        "source_id": object_id,
-        "scope": entry.get("scope"),
-        "journal_date": _to_rfc3339(entry.get("journal_date")),
-        "created_at": _to_rfc3339(entry.get("created_at")),
-        "title": title or None,
-        "body_text": body_text,
-        "tags": tags or None,
-        "content_hash": content_hash,
-        "embedding_model": model,
-    }
-    cleaned = _strip_none(properties)
-    if existing:
-        try:
-            await update_object(weaviate_client, object_id, cleaned, embedding)
-        except RuntimeError as exc:
-            if "no object with id" in str(exc):
-                await upsert_object(weaviate_client, object_id, cleaned, embedding)
-            else:
-                raise
-    else:
-        await upsert_object(weaviate_client, object_id, cleaned, embedding)
+        # Generate embedding
+        ollama_client = get_ollama_client()
+        full_text = f"{title}\n\n{body_text}".strip()
+        chunks = _chunk_text(full_text, EMBEDDING_CHUNK_SIZE)
+        embeddings: list[list[float]] = []
+        for chunk in chunks:
+            embeddings.append(await embed_text(chunk, model=model, client=ollama_client))
+        embedding = _average_vectors(embeddings)
+
+        LOGGER.info(
+            "PostgreSQL embedding length=%s model=%s chunks=%s",
+            len(embedding),
+            model,
+            len(chunks),
+        )
+
+        # Store in PostgreSQL
+        await update_journal_entry_embedding(
+            session, entry_id, embedding, model, content_hash
+        )
 
 
 def enqueue_ingest(entry: dict[str, Any], embedding_model: str | None = None) -> None:

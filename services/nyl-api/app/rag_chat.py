@@ -4,9 +4,11 @@ import os
 import time
 from typing import Any
 
+from .database import SessionLocal
+from .db import search_journal_entries_by_vector
+from .journal_text import extract_journal_text
 from .ollama import embed_text, get_ollama_client
 from .schemas import ChatMessage, ChatRequest, RagConfig
-from .weaviate import get_weaviate_client, query_journal_entries
 
 LOGGER = logging.getLogger(__name__)
 
@@ -22,10 +24,13 @@ def _last_user_message(messages: list[ChatMessage]) -> str:
     return ""
 
 
-def _format_date(raw_date: str | None) -> str:
+def _format_date(raw_date: Any) -> str:
     if not raw_date:
         return "unknown-date"
-    return raw_date.split("T")[0]
+    # Handle both date objects and ISO strings
+    if hasattr(raw_date, "isoformat"):
+        return raw_date.isoformat()
+    return str(raw_date).split("T")[0]
 
 
 def _excerpt(text: str, max_chars: int = 280) -> str:
@@ -55,8 +60,8 @@ def _build_context_block(results: list[dict[str, Any]]) -> str:
     for item in results:
         title = item.get("title") or "Untitled"
         journal_date = _format_date(item.get("journal_date"))
-        source_id = item.get("source_id") or "unknown-id"
-        body_text = item.get("body_text") or ""
+        source_id = str(item.get("id") or "unknown-id")
+        body_text = extract_journal_text(item.get("body") or {})
         excerpt = _excerpt(body_text)
         lines.append(f"- {journal_date} · {title} (id: {source_id})")
         if excerpt:
@@ -111,16 +116,18 @@ async def apply_rag_context(request: ChatRequest, default_embedding_model: str) 
 
     async def _build_context() -> str:
         ollama_client = get_ollama_client()
-        weaviate_client = get_weaviate_client()
         model = embedding_model or default_embedding_model
         embedding = await embed_text(query, model=model, client=ollama_client)
-        results = await query_journal_entries(weaviate_client, embedding, query, top_k)
+
+        async with SessionLocal() as session:
+            results = await search_journal_entries_by_vector(session, embedding, top_k)
+
         return _build_context_block(results)
 
     start = time.perf_counter()
     try:
         context_block = await asyncio.wait_for(_build_context(), RAG_TIMEOUT_SECONDS)
-    except Exception as exc:
+    except Exception:
         LOGGER.exception("RAG retrieval failed, continuing without context")
         return request
     duration_ms = (time.perf_counter() - start) * 1000

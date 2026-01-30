@@ -22,6 +22,8 @@ def _entry_to_dict(entry: JournalEntry) -> dict[str, Any]:
         "tags": entry.tags,
         "is_deleted": entry.is_deleted,
         "deleted_at": entry.deleted_at,
+        "embedding_model": entry.embedding_model,
+        "content_hash": entry.content_hash,
     }
 
 
@@ -472,3 +474,75 @@ async def restore_chat_session(
     await session.commit()
     await session.refresh(chat_session)
     return _session_to_dict(chat_session)
+
+
+async def search_journal_entries_by_vector(
+    session: AsyncSession,
+    embedding: list[float],
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Search journal entries by cosine similarity."""
+    result = await session.execute(
+        select(JournalEntry)
+        .where(JournalEntry.is_deleted.is_(False))
+        .where(JournalEntry.embedding.isnot(None))
+        .order_by(JournalEntry.embedding.cosine_distance(embedding))
+        .limit(limit)
+    )
+    return [_entry_to_dict(e) for e in result.scalars().all()]
+
+
+async def update_journal_entry_embedding(
+    session: AsyncSession,
+    entry_id: UUID,
+    embedding: list[float],
+    embedding_model: str,
+    content_hash: str,
+) -> bool:
+    """Update embedding for a journal entry."""
+    result = await session.execute(
+        select(JournalEntry).where(JournalEntry.id == entry_id)
+    )
+    entry = result.scalar_one_or_none()
+    if entry is None:
+        return False
+    entry.embedding = embedding
+    entry.embedding_model = embedding_model
+    entry.content_hash = content_hash
+    await session.commit()
+    return True
+
+
+async def clear_journal_entry_embedding(
+    session: AsyncSession,
+    entry_id: UUID,
+) -> bool:
+    """Clear embedding for a journal entry (when content is empty)."""
+    result = await session.execute(
+        select(JournalEntry).where(JournalEntry.id == entry_id)
+    )
+    entry = result.scalar_one_or_none()
+    if entry is None:
+        return False
+    entry.embedding = None
+    entry.embedding_model = None
+    entry.content_hash = None
+    await session.commit()
+    return True
+
+
+async def get_journal_entry_embedding_info(
+    session: AsyncSession,
+    entry_id: UUID,
+) -> dict[str, Any] | None:
+    """Get embedding metadata for a journal entry."""
+    result = await session.execute(
+        select(JournalEntry).where(JournalEntry.id == entry_id)
+    )
+    entry = result.scalar_one_or_none()
+    if entry is None:
+        return None
+    return {
+        "content_hash": entry.content_hash,
+        "embedding_model": entry.embedding_model,
+    }

@@ -4,3 +4,4 @@ asyncpg==0.30.0
 SQLAlchemy==2.0.36
 alembic==1.13.2
 uvicorn==0.30.6
+pgvector==0.3.6
