@@ -305,7 +305,6 @@ export default function JournalPage({ location, onNavigate }) {
     draftIsDeleted,
     draftTitle,
     draftBody,
-    draftStatus,
     removeEntry,
     setSelectedEntry,
     upsertEntry
