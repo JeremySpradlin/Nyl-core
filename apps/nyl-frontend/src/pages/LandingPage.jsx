@@ -578,30 +578,28 @@ export default function LandingPage({
                   New chat
                 </button>
               </div>
-              <div className="chat-filter-row">
-                <div className="chat-filter-segment">
-                  <button
-                    className={`filter-button${chatFilter === "active" ? " active" : ""}`}
-                    type="button"
-                    onClick={() => setChatFilter("active")}
-                  >
-                    Active
-                  </button>
-                  <button
-                    className={`filter-button${chatFilter === "archived" ? " active" : ""}`}
-                    type="button"
-                    onClick={() => setChatFilter("archived")}
-                  >
-                    Archived
-                  </button>
-                  <button
-                    className={`filter-button${chatFilter === "deleted" ? " active" : ""}`}
-                    type="button"
-                    onClick={() => setChatFilter("deleted")}
-                  >
-                    Trash
-                  </button>
-                </div>
+              <div className="filter-tabs">
+                <button
+                  className={`filter-tab${chatFilter === "active" ? " active" : ""}`}
+                  type="button"
+                  onClick={() => setChatFilter("active")}
+                >
+                  Active
+                </button>
+                <button
+                  className={`filter-tab${chatFilter === "archived" ? " active" : ""}`}
+                  type="button"
+                  onClick={() => setChatFilter("archived")}
+                >
+                  Archived
+                </button>
+                <button
+                  className={`filter-tab${chatFilter === "deleted" ? " active" : ""}`}
+                  type="button"
+                  onClick={() => setChatFilter("deleted")}
+                >
+                  Trash
+                </button>
               </div>
               {chatSessionsStatus === "loading" && (
                 <div className="sidebar-empty">Loading chats...</div>

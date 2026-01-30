@@ -456,14 +456,6 @@ export default function JournalPage({ location, onNavigate }) {
     }
   };
 
-  const handleNewEntry = () => {
-    const today = new Date();
-    if (entriesFilter !== "active") {
-      setEntriesFilter("active");
-    }
-    setSelection(selectedScope, today);
-  };
-
   const handleCreateTask = async () => {
     const text = taskInput.trim();
     if (!text || !draftId) {
@@ -578,30 +570,21 @@ export default function JournalPage({ location, onNavigate }) {
 
           <div className="panel-header journal-entries-header">
             <h3>Entries</h3>
-            <div className="journal-entry-filters">
+            <div className="filter-tabs">
               <button
-                className={`filter-button${entriesFilter === "active" ? " active" : ""}`}
+                className={`filter-tab${entriesFilter === "active" ? " active" : ""}`}
                 type="button"
                 onClick={() => setEntriesFilter("active")}
               >
-                Entries
+                Active
               </button>
               <button
-                className={`filter-button${entriesFilter === "deleted" ? " active" : ""}`}
+                className={`filter-tab${entriesFilter === "deleted" ? " active" : ""}`}
                 type="button"
                 onClick={() => setEntriesFilter("deleted")}
               >
                 Trash
               </button>
-              {entriesFilter === "active" && (
-                <button
-                  className="button button-secondary"
-                  type="button"
-                  onClick={handleNewEntry}
-                >
-                  New entry
-                </button>
-              )}
             </div>
           </div>
           {entriesStatus === "loading" && (

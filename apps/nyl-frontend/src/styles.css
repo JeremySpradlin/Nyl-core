@@ -407,31 +407,6 @@ body {
   gap: 6px;
 }
 
-.journal-entry-filters {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.filter-button {
-  border: 1px solid rgba(29, 27, 22, 0.12);
-  border-radius: 999px;
-  padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.6);
-  font-size: 12px;
-  font-family: "IBM Plex Mono", monospace;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
-}
-
-.filter-button.active {
-  border-color: var(--accent);
-  background: rgba(255, 255, 255, 0.85);
-}
-
 .journal-entry-item {
   border: 1px solid transparent;
   border-radius: 12px;
@@ -671,21 +646,42 @@ body {
   gap: 8px;
 }
 
-.chat-filter-row {
+.filter-tabs {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 16px;
 }
 
-.chat-filter-segment {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  padding: 4px;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(29, 27, 22, 0.08);
-  gap: 4px;
+.filter-tab {
+  background: none;
+  border: none;
+  padding: 4px 0;
+  font-size: 13px;
+  font-family: "IBM Plex Mono", monospace;
+  letter-spacing: 0.04em;
+  color: rgba(29, 27, 22, 0.5);
+  cursor: pointer;
+  transition: color 0.2s ease;
+  position: relative;
+}
+
+.filter-tab:hover {
+  color: rgba(29, 27, 22, 0.8);
+}
+
+.filter-tab.active {
+  color: var(--ink);
+}
+
+.filter-tab.active::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
 }
 
 .chat-session-list {
@@ -705,6 +701,7 @@ body {
 
 .chat-session-item {
   flex: 1;
+  min-width: 0;
   border: none;
   border-radius: 10px;
   padding: 8px 6px;
@@ -1333,26 +1330,21 @@ html[data-theme="dark"] .chat-session-item {
   color: var(--ink);
 }
 
-html[data-theme="dark"] .chat-filter-segment {
-  background: rgba(27, 26, 24, 0.9);
-  border-color: rgba(245, 239, 231, 0.16);
+html[data-theme="dark"] .filter-tab {
+  color: rgba(245, 239, 231, 0.5);
+}
+
+html[data-theme="dark"] .filter-tab:hover {
+  color: rgba(245, 239, 231, 0.8);
+}
+
+html[data-theme="dark"] .filter-tab.active {
+  color: var(--ink);
 }
 
 html[data-theme="dark"] .chat-session-row {
   background: transparent;
   border-color: transparent;
-}
-
-html[data-theme="dark"] .filter-button {
-  background: rgba(27, 26, 24, 0.75);
-  border-color: rgba(245, 239, 231, 0.16);
-  color: rgba(245, 239, 231, 0.7);
-}
-
-html[data-theme="dark"] .filter-button.active {
-  border-color: var(--accent);
-  background: rgba(27, 26, 24, 0.95);
-  color: var(--ink);
 }
 
 html[data-theme="dark"] .project-item:hover,
