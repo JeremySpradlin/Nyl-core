@@ -1,51 +1,99 @@
-# Repository Guidelines
+# AGENTS.md
 
-## Project Structure & Module Organization
-This repository is a set of Kubernetes manifests for running Nyl-core services on
-MicroK8s. The main entry point is `Cluster/`, which contains per-service
-directories:
-- `Cluster/JupyterLab/`: JupyterLab deployment, PVC, service, ingress, and
-  kustomization.
-- `Cluster/Ollama/`: Ollama deployment, PVC, service, ingress, models ConfigMap,
-  and pull-models Job.
-- `Cluster/WebUI/`: Open WebUI deployment, PVC, service, ingress, and
-  kustomization.
+## Project overview
+Nyl-core is a personal assistant platform running on MicroK8s. It includes:
+- **Backend API**: FastAPI + async PostgreSQL (services/nyl-api)
+- **Frontend**: Vite + React (apps/nyl-frontend)
+- **Kubernetes manifests**: Kustomize packages per service (Cluster/)
 
-Each service folder is a standalone kustomize package with its own
-`kustomization.yaml`. There is no application source code or test suite here.
+## Repository structure
+- `services/nyl-api/`: FastAPI app, SQLAlchemy models, Alembic migrations, RAG pipeline
+- `apps/nyl-frontend/`: Vite React frontend
+- `Cluster/`: Kustomize packages for services
+  - `NylApi`, `NylFrontend`, `Postgres`, `Ollama`, `JupyterLab`, `WebUI`, `Weaviate`, `GpuReady`, `TriliumNext`
+- `docs/`: design plans and refactor notes
 
-## Build, Test, and Development Commands
-Use MicroK8s to apply manifests:
-- `microk8s kubectl apply -k Cluster/JupyterLab` deploys JupyterLab.
-- `microk8s kubectl apply -k Cluster/Ollama` deploys Ollama.
-- `microk8s kubectl apply -k Cluster/WebUI` deploys Open WebUI.
+## Essential commands
+### Backend (nyl-api)
+```bash
+cd services/nyl-api
+source .venv/bin/activate
 
-Operational examples:
-- Update JupyterLab access token in `Cluster/JupyterLab/secret.yaml`.
-- Re-run the model pre-pull Job:
-  `microk8s kubectl delete job ollama-pull-models` then
-  `microk8s kubectl apply -f Cluster/Ollama/pull-models-job.yaml`.
+make run   # local dev server (uvicorn)
+make test  # pytest
+make smoke # basic health/models/chat smoke checks
+```
 
-## Coding Style & Naming Conventions
-- YAML files use 2-space indentation; keep this consistent.
-- Use Kubernetes naming patterns: lowercase, hyphenated resource names (e.g.,
-  `ollama-pull-models`).
-- Keep kustomize resources listed explicitly in each `kustomization.yaml`.
+### Frontend (nyl-frontend)
+```bash
+cd apps/nyl-frontend
+npm run dev
+npm run build
+npm run preview
+```
 
-## Testing Guidelines
-There are no automated tests in this repository. Validate changes by applying
-manifests to a MicroK8s cluster and checking service readiness and ingress
-access.
+### Deployment (MicroK8s)
+```bash
+# API and frontend deploy scripts
+services/nyl-api/scripts/deploy.sh
+apps/nyl-frontend/scripts/deploy.sh
 
-## Commit & Pull Request Guidelines
-Git history does not establish a convention yet. Use concise, imperative commit
-messages (e.g., "Add Ollama ingress"). For PRs, include:
-- A short description of what changed and why.
-- Links to related issues or tickets if applicable.
-- Any manual verification steps (kubectl commands, URLs, or screenshots).
+# Apply manifests per service
+microk8s kubectl apply -k Cluster/NylApi
+microk8s kubectl apply -k Cluster/NylFrontend
+microk8s kubectl apply -k Cluster/Postgres
+microk8s kubectl apply -k Cluster/Ollama
+microk8s kubectl apply -k Cluster/JupyterLab
+microk8s kubectl apply -k Cluster/WebUI
+```
 
-## Configuration & Access Notes
-- Ingress hostnames assume local `/etc/hosts` mappings as described in each
-  service README (e.g., `ollama.local`, `webui.ollama.local`).
-- PVCs and hostPath mounts are defined per service; review paths before
-  deployment, especially the dataset hostPath in JupyterLab.
+```bash
+# Run database migrations
+microk8s kubectl apply -f Cluster/NylApi/migrate-job.yaml
+```
+
+## Code organization
+### Backend (services/nyl-api/app/)
+- `main.py`: FastAPI routes (chat, journal, RAG)
+- `models.py`: SQLAlchemy ORM models
+- `schemas.py`: Pydantic request/response models
+- `db.py`: async CRUD layer
+- `database.py`: async engine/session setup
+- `ollama.py`: Ollama LLM client
+- `weaviate.py`: Weaviate client
+- `rag_chat.py`, `rag_ingest.py`, `rag_db.py`: RAG pipeline
+
+### Frontend (apps/nyl-frontend/src/)
+- `App.jsx`: simple route switch between landing and journal pages
+- `pages/LandingPage.jsx`: chat UI + model picker
+- `pages/JournalPage.jsx`: journal editor (TipTap)
+- `components/`: shared UI widgets
+
+## Testing
+- Backend uses pytest (see `make test` or `.venv/bin/pytest`).
+- No frontend test scripts are defined in `package.json`.
+
+## Conventions
+- YAML manifests use 2-space indentation.
+- Kubernetes resource names are lowercase, hyphenated (e.g., `nyl-api`).
+- Frontend uses functional React components and Vite tooling.
+- Backend is async-first (FastAPI + async SQLAlchemy).
+
+## Environment & deployment notes
+- Local ingress hostnames (map in `/etc/hosts`):
+  - `nyl.local` (frontend)
+  - `api.nyl.local` (API)
+  - `ollama.local` (Ollama)
+  - `jupyter.local` (JupyterLab)
+  - `webui.ollama.local` (Open WebUI)
+- Local registry: images pushed to `localhost:32000` (MicroK8s).
+- JupyterLab persistent environments should live under `/home/jovyan/work` (PVC-backed). Example:
+  ```bash
+  cd /home/jovyan/work
+  python -m venv myproj/.venv
+  source myproj/.venv/bin/activate
+  ```
+
+## Gotchas
+- `make smoke` uses curl calls for a running API at `localhost:8000`.
+- Review PVC hostPath values in `Cluster/*/pvc.yaml` before deployment.
