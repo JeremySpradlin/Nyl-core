@@ -52,6 +52,7 @@ export default function useChat({
   selectedModel,
   embeddingModel,
   sessionId,
+  scope,
   onSessionTouched
 }) {
   const [history, setHistory] = useState([]);
@@ -182,7 +183,8 @@ export default function useChat({
           enabled: true,
           source: "journal",
           top_k: 5,
-          embedding_model: embeddingModel || undefined
+          embedding_model: embeddingModel || undefined,
+          scope: scope || undefined
         }
       };
 

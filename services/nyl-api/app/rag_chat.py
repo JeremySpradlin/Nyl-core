@@ -91,20 +91,22 @@ def _inject_context(messages: list[ChatMessage], context_block: str) -> list[Cha
     return updated
 
 
-def _resolve_rag_config(rag: RagConfig | None) -> tuple[bool, int, str | None]:
+def _resolve_rag_config(rag: RagConfig | None) -> tuple[bool, int, str | None, str | None]:
     if rag is None:
         enabled = True
         top_k = RAG_TOP_K_DEFAULT
         embedding_model = None
+        scope = None
     else:
         enabled = rag.enabled
         top_k = rag.top_k or RAG_TOP_K_DEFAULT
         embedding_model = rag.embedding_model
-    return enabled, min(max(top_k, 1), RAG_TOP_K_MAX), embedding_model
+        scope = rag.scope
+    return enabled, min(max(top_k, 1), RAG_TOP_K_MAX), embedding_model, scope
 
 
 async def apply_rag_context(request: ChatRequest, default_embedding_model: str) -> ChatRequest:
-    enabled, top_k, embedding_model = _resolve_rag_config(request.rag)
+    enabled, top_k, embedding_model, scope = _resolve_rag_config(request.rag)
     if not enabled:
         LOGGER.info("RAG disabled for chat request")
         return request
@@ -120,7 +122,9 @@ async def apply_rag_context(request: ChatRequest, default_embedding_model: str) 
         embedding = await embed_text(query, model=model, client=ollama_client)
 
         async with SessionLocal() as session:
-            results = await search_journal_entries_by_vector(session, embedding, top_k)
+            results = await search_journal_entries_by_vector(
+                session, embedding, top_k, scope=scope
+            )
 
         return _build_context_block(results)
 

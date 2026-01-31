@@ -90,6 +90,7 @@ class ChatSession(Base):
     title: Mapped[str] = mapped_column(Text, nullable=False, default="New chat")
     model: Mapped[str | None] = mapped_column(Text)
     system_prompt: Mapped[str | None] = mapped_column(Text)
+    scope: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

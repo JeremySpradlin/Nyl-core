@@ -13,18 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .database import get_session, shutdown_db, startup_db
 from .db import (
-    add_chat_messages,
-    archive_chat_session,
     create_journal_entry,
-    create_chat_session,
     delete_journal_entry,
     ensure_journal_entry,
-    get_chat_session,
     get_journal_entry,
     get_journal_entry_by_date,
     get_journal_task,
-    list_chat_messages,
-    list_chat_sessions,
     update_journal_entry,
     list_journal_entries,
     list_journal_entry_markers,
@@ -33,12 +27,9 @@ from .db import (
     create_journal_task,
     update_journal_task,
     delete_journal_task,
-    purge_deleted_chat_sessions,
     restore_journal_entry,
-    restore_chat_session,
-    soft_delete_chat_session,
-    unarchive_chat_session,
 )
+from .services import ChatService
 from .journal_text import extract_journal_text
 from .rag_db import create_ingest_job, get_ingest_job
 from .rag_ingest import DEFAULT_EMBEDDING_MODEL, enqueue_ingest, reindex_journal_entries
@@ -140,24 +131,26 @@ async def create_chat(
     request: ChatSessionCreate,
     session: AsyncSession = Depends(get_session),
 ):
-    chat_session = await create_chat_session(
-        session=session,
+    service = ChatService(session)
+    return await service.create_session(
         title=request.title,
         model=request.model,
         system_prompt=request.system_prompt,
+        scope=request.scope,
     )
-    return chat_session
 
 
 @app.get("/v1/chats", response_model=list[ChatSession])
 async def list_chats(
     status: str = Query("active"),
+    scope: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
     if status not in ("active", "archived", "deleted"):
         raise HTTPException(status_code=400, detail="Invalid status filter")
-    await purge_deleted_chat_sessions(session)
-    return await list_chat_sessions(session=session, status=status, limit=200)
+    service = ChatService(session)
+    await service.purge_deleted_sessions()
+    return await service.list_sessions(status=status, scope=scope, limit=200)
 
 
 @app.get("/v1/chats/{chat_id:uuid}", response_model=ChatSessionDetail)
@@ -166,13 +159,11 @@ async def get_chat(
     include_deleted: bool = Query(False),
     session: AsyncSession = Depends(get_session),
 ):
-    chat_session = await get_chat_session(
-        session=session, session_id=chat_id, include_deleted=include_deleted
-    )
-    if chat_session is None:
+    service = ChatService(session)
+    result = await service.get_session_with_messages(chat_id, include_deleted=include_deleted)
+    if result is None:
         raise HTTPException(status_code=404, detail="Chat session not found")
-    messages = await list_chat_messages(session=session, session_id=chat_id)
-    return {"session": chat_session, "messages": messages}
+    return result
 
 
 @app.post("/v1/chats/{chat_id:uuid}/messages", response_model=list[ChatMessageRecord])
@@ -183,10 +174,10 @@ async def create_chat_messages(
     system_prompt: str | None = Query(default=None),
     session: AsyncSession = Depends(get_session),
 ):
-    messages = await add_chat_messages(
-        session=session,
-        session_id=chat_id,
-        messages=[message.model_dump() for message in request],
+    service = ChatService(session)
+    messages = await service.add_messages(
+        chat_id,
+        [message.model_dump() for message in request],
         model=model,
         system_prompt=system_prompt,
     )
@@ -200,7 +191,8 @@ async def archive_chat(
     chat_id: UUID,
     session: AsyncSession = Depends(get_session),
 ):
-    chat_session = await archive_chat_session(session=session, session_id=chat_id)
+    service = ChatService(session)
+    chat_session = await service.archive_session(chat_id)
     if chat_session is None:
         raise HTTPException(status_code=404, detail="Chat session not found")
     return chat_session
@@ -211,7 +203,8 @@ async def unarchive_chat(
     chat_id: UUID,
     session: AsyncSession = Depends(get_session),
 ):
-    chat_session = await unarchive_chat_session(session=session, session_id=chat_id)
+    service = ChatService(session)
+    chat_session = await service.unarchive_session(chat_id)
     if chat_session is None:
         raise HTTPException(status_code=404, detail="Chat session not found")
     return chat_session
@@ -222,7 +215,8 @@ async def delete_chat(
     chat_id: UUID,
     session: AsyncSession = Depends(get_session),
 ):
-    chat_session = await soft_delete_chat_session(session=session, session_id=chat_id)
+    service = ChatService(session)
+    chat_session = await service.delete_session(chat_id)
     if chat_session is None:
         raise HTTPException(status_code=404, detail="Chat session not found")
     return chat_session
@@ -233,7 +227,8 @@ async def restore_chat(
     chat_id: UUID,
     session: AsyncSession = Depends(get_session),
 ):
-    chat_session = await restore_chat_session(session=session, session_id=chat_id)
+    service = ChatService(session)
+    chat_session = await service.restore_session(chat_id)
     if chat_session is None:
         raise HTTPException(status_code=404, detail="Chat session not found")
     return chat_session

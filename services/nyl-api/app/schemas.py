@@ -17,6 +17,7 @@ class ChatSessionCreate(BaseModel):
     title: str | None = None
     model: str | None = None
     system_prompt: str | None = None
+    scope: str | None = None
 
 
 class ChatSession(BaseModel):
@@ -24,6 +25,7 @@ class ChatSession(BaseModel):
     title: str
     model: str | None = None
     system_prompt: str | None = None
+    scope: str | None = None
     created_at: datetime
     updated_at: datetime
     archived_at: datetime | None = None
@@ -53,6 +55,7 @@ class RagConfig(BaseModel):
     source: str | None = None
     top_k: int | None = Field(default=None, ge=1)
     embedding_model: str | None = None
+    scope: str | None = None
 
 
 class ChatRequest(BaseModel):

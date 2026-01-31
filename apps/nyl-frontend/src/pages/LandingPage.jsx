@@ -158,7 +158,7 @@ export default function LandingPage({
     setChatSessionsStatus("loading");
     setChatSessionsError("");
     try {
-      const response = await fetch(`${API_BASE}/v1/chats?status=${chatFilter}`);
+      const response = await fetch(`${API_BASE}/v1/chats?status=${chatFilter}&scope=`);
       if (!response.ok) {
         throw new Error("Could not load chats.");
       }
