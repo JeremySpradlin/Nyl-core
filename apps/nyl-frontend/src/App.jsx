@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import LandingPage from "./pages/LandingPage.jsx";
 import JournalPage from "./pages/JournalPage.jsx";
+import ProjectsPage from "./pages/ProjectsPage.jsx";
 import useUiSettings from "./hooks/useUiSettings.js";
 
 const getLocation = () => ({
@@ -27,9 +28,13 @@ export default function App() {
   };
 
   const isJournal = useMemo(() => location.pathname === "/journal", [location.pathname]);
+  const isProjects = useMemo(() => location.pathname === "/projects", [location.pathname]);
 
   if (isJournal) {
     return <JournalPage location={location} onNavigate={navigate} />;
+  }
+  if (isProjects) {
+    return <ProjectsPage onNavigate={navigate} />;
   }
   return (
     <LandingPage

@@ -534,6 +534,7 @@ export default function LandingPage({
       <TopNav
         label="Home"
         onJournal={() => onNavigate("/journal")}
+        onProjects={() => onNavigate("/projects")}
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
       <div className="content">

@@ -1,10 +1,11 @@
-export default function TopNav({ label, onHome, onJournal, onOpenSettings }) {
+export default function TopNav({ label, onHome, onJournal, onProjects, onOpenSettings, children }) {
   return (
     <div className="top-nav">
       <div className="top-nav-brand">
         <span className="titlebar-mark">Nyl</span>
         <span className="titlebar-dot">{label}</span>
       </div>
+      {children && <div className="top-nav-center">{children}</div>}
       <div className="top-nav-links">
         {onHome && (
           <button className="nav-link" type="button" onClick={onHome}>
@@ -14,6 +15,11 @@ export default function TopNav({ label, onHome, onJournal, onOpenSettings }) {
         {onJournal && (
           <button className="nav-link" type="button" onClick={onJournal}>
             Journal
+          </button>
+        )}
+        {onProjects && (
+          <button className="nav-link" type="button" onClick={onProjects}>
+            Projects
           </button>
         )}
         <a

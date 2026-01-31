@@ -542,7 +542,11 @@ export default function JournalPage({ location, onNavigate }) {
 
   return (
     <div className="page">
-      <TopNav label="Journal" onHome={() => onNavigate("/")} />
+      <TopNav
+        label="Journal"
+        onHome={() => onNavigate("/")}
+        onProjects={() => onNavigate("/projects")}
+      />
       <div className="content journal-page">
         <aside className="panel journal-sidebar">
           <div className="panel-header">
