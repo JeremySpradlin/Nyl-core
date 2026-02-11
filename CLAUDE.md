@@ -46,8 +46,6 @@ microk8s kubectl apply -k Cluster/NylApi
 microk8s kubectl apply -k Cluster/NylFrontend
 microk8s kubectl apply -k Cluster/Postgres
 microk8s kubectl apply -k Cluster/Ollama
-microk8s kubectl apply -k Cluster/JupyterLab
-microk8s kubectl apply -k Cluster/WebUI
 
 # Run database migrations (manual job)
 microk8s kubectl apply -f Cluster/NylApi/migrate-job.yaml
@@ -65,8 +63,7 @@ Images are pushed to `localhost:32000` (MicroK8s registry).
 - **db.py**: CRUD operations using async SQLAlchemy
 - **database.py**: Async database engine setup (asyncpg)
 - **ollama.py**: Ollama LLM client for chat/embeddings
-- **weaviate.py**: Weaviate vector DB client
-- **rag_chat.py / rag_ingest.py / rag_db.py**: RAG pipeline for journal search
+- **rag_chat.py / rag_ingest.py / rag_db.py**: RAG pipeline for journal search (pgvector)
 
 Database migrations use Alembic (migrations/ directory).
 
@@ -80,10 +77,7 @@ Database migrations use Alembic (migrations/ directory).
 Each service is a standalone kustomize package with deployment, service, ingress, and PVC resources:
 - NylApi, NylFrontend: Application deployments
 - Postgres: Database with secret-managed credentials
-- Ollama: LLM server with GPU, model pre-pull job
-- JupyterLab: Notebook environment with GPU
-- WebUI: Open WebUI interface
-- Weaviate: Vector database for RAG
+- Ollama: LLM server with GPU
 - GpuReady: DaemonSet that labels nodes when GPU is available
 
 ### Access
@@ -91,8 +85,6 @@ Local ingress hostnames (require /etc/hosts entries pointing to 192.168.1.176):
 - `nyl.local` - Frontend
 - `api.nyl.local` - API
 - `ollama.local` - Ollama
-- `jupyter.local` - JupyterLab
-- `webui.ollama.local` - Open WebUI
 
 ## Testing
 
@@ -109,6 +101,6 @@ Tests mock external services (Ollama, database) using fixtures in tests/conftest
 ## Coding Conventions
 
 - YAML files: 2-space indentation
-- Kubernetes resources: lowercase, hyphenated names (e.g., `nyl-api`, `ollama-pull-models`)
+- Kubernetes resources: lowercase, hyphenated names (e.g., `nyl-api`)
 - Python: async/await throughout, Pydantic for validation
 - Frontend: functional React components, no state management library

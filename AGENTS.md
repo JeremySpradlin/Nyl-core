@@ -10,7 +10,7 @@ Nyl-core is a personal assistant platform running on MicroK8s. It includes:
 - `services/nyl-api/`: FastAPI app, SQLAlchemy models, Alembic migrations, RAG pipeline
 - `apps/nyl-frontend/`: Vite React frontend
 - `Cluster/`: Kustomize packages for services
-  - `NylApi`, `NylFrontend`, `Postgres`, `Ollama`, `JupyterLab`, `WebUI`, `Weaviate`, `GpuReady`, `TriliumNext`
+  - `NylApi`, `NylFrontend`, `Postgres`, `Ollama`, `GpuReady`
 - `docs/`: design plans and refactor notes
 
 ## Essential commands
@@ -43,8 +43,6 @@ microk8s kubectl apply -k Cluster/NylApi
 microk8s kubectl apply -k Cluster/NylFrontend
 microk8s kubectl apply -k Cluster/Postgres
 microk8s kubectl apply -k Cluster/Ollama
-microk8s kubectl apply -k Cluster/JupyterLab
-microk8s kubectl apply -k Cluster/WebUI
 ```
 
 ```bash
@@ -60,8 +58,7 @@ microk8s kubectl apply -f Cluster/NylApi/migrate-job.yaml
 - `db.py`: async CRUD layer
 - `database.py`: async engine/session setup
 - `ollama.py`: Ollama LLM client
-- `weaviate.py`: Weaviate client
-- `rag_chat.py`, `rag_ingest.py`, `rag_db.py`: RAG pipeline
+- `rag_chat.py`, `rag_ingest.py`, `rag_db.py`: RAG pipeline (pgvector)
 
 ### Frontend (apps/nyl-frontend/src/)
 - `App.jsx`: simple route switch between landing and journal pages
@@ -84,15 +81,7 @@ microk8s kubectl apply -f Cluster/NylApi/migrate-job.yaml
   - `nyl.local` (frontend)
   - `api.nyl.local` (API)
   - `ollama.local` (Ollama)
-  - `jupyter.local` (JupyterLab)
-  - `webui.ollama.local` (Open WebUI)
 - Local registry: images pushed to `localhost:32000` (MicroK8s).
-- JupyterLab persistent environments should live under `/home/jovyan/work` (PVC-backed). Example:
-  ```bash
-  cd /home/jovyan/work
-  python -m venv myproj/.venv
-  source myproj/.venv/bin/activate
-  ```
 
 ## Gotchas
 - `make smoke` uses curl calls for a running API at `localhost:8000`.

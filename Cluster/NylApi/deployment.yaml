@@ -37,8 +37,6 @@ spec:
                 secretKeyRef:
                   name: postgres-secret
                   key: password
-            - name: WEAVIATE_URL
-              value: http://weaviate:8080
             - name: RAG_INGEST_ON_SAVE
               value: "true"
             - name: EMBEDDING_MODEL
