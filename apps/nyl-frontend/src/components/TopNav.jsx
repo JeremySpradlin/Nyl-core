@@ -22,14 +22,6 @@ export default function TopNav({ label, onHome, onJournal, onProjects, onOpenSet
             Projects
           </button>
         )}
-        <a
-          className="nav-link"
-          href="http://jupyter.local"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Jupyter
-        </a>
         {onOpenSettings && (
           <button
             type="button"
