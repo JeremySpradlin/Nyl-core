@@ -1,4 +1,4 @@
-export default function TopNav({ label, onHome, onJournal, onProjects, onOpenSettings, children }) {
+export default function TopNav({ label, onHome, onJournal, onProjects, onObsidian, onOpenSettings, children }) {
   return (
     <div className="top-nav">
       <div className="top-nav-brand">
@@ -20,6 +20,11 @@ export default function TopNav({ label, onHome, onJournal, onProjects, onOpenSet
         {onProjects && (
           <button className="nav-link" type="button" onClick={onProjects}>
             Projects
+          </button>
+        )}
+        {onObsidian && (
+          <button className="nav-link" type="button" onClick={onObsidian}>
+            Obsidian
           </button>
         )}
         {onOpenSettings && (

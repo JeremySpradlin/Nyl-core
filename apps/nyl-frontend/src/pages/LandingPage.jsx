@@ -535,6 +535,7 @@ export default function LandingPage({
         label="Home"
         onJournal={() => onNavigate("/journal")}
         onProjects={() => onNavigate("/projects")}
+        onObsidian={() => window.open("http://obsidian.local", "_blank")}
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
       <div className="content">
